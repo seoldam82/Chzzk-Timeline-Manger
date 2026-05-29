@@ -196,61 +196,33 @@ Gemini AI가 단순 요약이 아닌:
 
 ```json
 {
-  "TARGET_CHANNEL_ID": "12345678",
-  "GEMINI_API_KEY": "YOUR_API_KEY",
-  "WHISPER_MODEL": "large-v3",
-  "COOKIE_NID_AUT": "",
-  "COOKIE_NID_SES": ""
+    "TARGET_CHANNEL_ID": "치지직_32자리_채널_해시값",
+    "GEMINI_API_KEY": "본인의_GEMINI_API_KEY",
+    "NID_AUT": "네이버 쿠키에서 추출한 고유 인증 토큰 1 (선택 사항)",
+    "NID_SES": "네이버 쿠키에서 추출한 세션 인증 토큰 2 (선택 사항)",
+    "WHISPER_LANGUAGE": "ko",
+    "WHISPER_MODEL": "base"
 }
 ```
 
 ---
 
-## TARGET_CHANNEL_ID
-
-분석 대상 스트리머의 치지직 채널 ID입니다.
-
-예시:
-
-```json
-"TARGET_CHANNEL_ID": "12345678"
-```
-
----
-
-## GEMINI_API_KEY
-
-Google Gemini API Key입니다.
-
-Gemini AI 분석에 사용됩니다.
-
----
-
 ## WHISPER_MODEL
 
-사용할 Faster-Whisper 모델 크기입니다.
+음성을 분석하여 대본으로 변환할 때 사용할 **Faster-Whisper AI 모델의 크기**를 지정합니다. 
 
-추천:
+| 모델 크기 (Model) | 연산 속도 | 자막 정확도 | 권장 하드웨어 사양 | 특징 |
+| :--- | :---: | :---: | :---: | :--- |
+| **`tiny`** | 🚀 매우 빠름 | 📉 낮음 | 저사양 PC / 내장 그래픽 | 속도가 가장 빠르지만, 고유명사나 웅얼거리는 발언의 오차가 심합니다. |
+| **`base`** | ⚡ 빠름 | 📊 보통 | 일반 사무용 PC (기본값) | 속도 대비 무난한 성능을 보여주며, 리소스를 적게 먹습니다. |
+| **`small`** | 🏃 빠름 | 📈 준수함 | 보급형 그래픽카드 환경 | 적당한 속도와 일상적인 대화 분별력을 갖춘 밸런스형 모델입니다. |
+| **`medium`** | ⏰ 보통 | ✨ 좋음 | 메인스트림급 GPU 환경 | 방송용 은어나 발음이 뭉개지는 구간도 비교적 정확하게 잡아냅니다. |
+| **`large-v3`** | 🐢 느림 | 🎯 매우 높음 | 고사양 GPU (VRAM 8GB 이상) | 정확도가 가장 뛰어나지만 무겁고 연산 시간이 오래 걸립니다. |
+| **`turbo`** | ✈️ 매우 빠름 | 🌟 좋음 | 최신 고사양 GPU 환경 | `large-v3`급의 높은 정확도를 유지하면서 연산 속도를 획기적으로 개선한 최신 모델입니다. |
 
-| 모델       | 속도 | 정확도   |
-| -------- | -- | ----- |
-| small    | 빠름 | 낮음    |
-| medium   | 보통 | 좋음    |
-| large-v3 | 느림 | 매우 높음 |
-
-권장:
-
-```json
-"large-v3"
-```
-
----
-
-## COOKIE_NID_AUT / COOKIE_NID_SES
-
-네이버 로그인 세션 쿠키입니다.
-
-비워두면 프로그램이 자동 탐색합니다.
+> 💡 **추천 세팅:**
+> * **개인 PC 사양이 평범하거나 빠른 테스트를 원할 때:** `base` 또는 `small`
+> * **시간이 조금 걸리더라도 정확한 고품질 타임라인을 원할 때:** `medium` 또는 `turbo` (NVIDIA 외장 그래픽 권장)
 
 ---
 
