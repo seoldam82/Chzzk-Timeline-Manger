@@ -138,28 +138,6 @@ Gemini AI가 단순 요약이 아닌:
 
 ---
 
-# 📦 프로젝트 구조
-
-```text
-Chzzk-Timeline-Manager/
-│
-├── Main.py
-├── Timeline.py
-├── Chzzk_api.py
-├── config.json
-│
-├── prompt.txt
-├── streamer_info.txt
-│
-├── timeline/
-├── cache/
-├── chat/
-├── voicepalette/
-└── output/
-```
-
----
-
 # 📁 파일 설명
 
 ## Main.py
