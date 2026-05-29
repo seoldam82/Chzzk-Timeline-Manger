@@ -201,7 +201,7 @@ Gemini AI가 단순 요약이 아닌:
     "NID_AUT": "네이버 쿠키에서 추출한 고유 인증 토큰 1 (선택 사항)",
     "NID_SES": "네이버 쿠키에서 추출한 세션 인증 토큰 2 (선택 사항)",
     "WHISPER_LANGUAGE": "ko",
-    "WHISPER_MODEL": "base"
+    "WHISPER_MODEL": "Faster-Whisper 모델 크기"
 }
 ```
 
