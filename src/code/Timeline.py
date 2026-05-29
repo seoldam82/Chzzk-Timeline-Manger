@@ -21,6 +21,14 @@ GEMINI_MODEL = "gemini-3.1-flash-lite"
 TEMPERATURE = 0.2  
 MAX_OUTPUT_TOKENS = 4000             
 TOP_P = 0.95                          
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
+
+FFMPEG_EXE = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+FFMPEG_PATH = os.path.join(PROJECT_ROOT, "ffmpeg", "bin", FFMPEG_EXE)
+FFMPEG_BIN_DIR = os.path.dirname(FFMPEG_PATH)
+if os.path.exists(FFMPEG_BIN_DIR) and FFMPEG_BIN_DIR not in os.environ["PATH"]:
+    os.environ["PATH"] = FFMPEG_BIN_DIR + os.pathsep + os.environ["PATH"]
 
 class TimelineItem(BaseModel):
     group_large: str = Field(
@@ -121,11 +129,12 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
         print("❌ VOD 메타데이터 파싱 실패.")
         return ""
 
-    try:
-        import imageio_ffmpeg
-        ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
-    except ImportError:
+    if not os.path.exists(FFMPEG_PATH):
+        print(f"⚠️ [경고] 지정된 경로에 FFmpeg 바이너리가 없습니다: {FFMPEG_PATH}")
+        print("💡 시스템 기본 환경 변수의 ffmpeg 구동을 시도합니다.")
         ffmpeg_bin = "ffmpeg"
+    else:
+        ffmpeg_bin = FFMPEG_PATH
 
     print(f"\n📡 [최초 1회 실행] 16개 스레드 비동기 전체 오디오 수집 개시...")
     
@@ -142,6 +151,7 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
         'fragment_retries': 20,
         'skip_unavailable_fragments': False,
         'http_chunk_size': 10485760,
+        'ffmpeg_location': ffmpeg_bin, 
     }
 
     try:
