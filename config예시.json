@@ -1,0 +1,8 @@
+{
+    "TARGET_CHANNEL_ID": "치지직_32자리_채널_해시값",
+    "GEMINI_API_KEY": "본인의_GEMINI_API_KEY",
+    "NID_AUT": "",
+    "NID_SES": "",
+    "WHISPER_LANGUAGE": "ko",
+    "WHISPER_MODEL": "base"
+}
