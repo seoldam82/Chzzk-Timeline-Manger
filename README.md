@@ -119,27 +119,6 @@ Gemini AI가 다음 구조로 방송 내용을 정리합니다.
 
 ---
 
-# 📁 프로젝트 구조
-
-```text
-Chzzk-Timeline-Manager/
-│
-├── Main.py
-├── Timeline.py
-├── Chzzk_api.py
-├── config.json
-│
-├── prompt.txt
-├── streamer_info.txt
-│
-├── cache/
-├── chat/
-├── output/
-└── timeline/
-```
-
----
-
 # 📄 파일 설명
 
 ## Main.py
