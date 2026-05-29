@@ -4,7 +4,12 @@ import math
 import signal
 import re
 import glob
-from Chzzk_api import select_chzzk_vod, download_chzzk_vod_chats, write_chzzk_comment, CONFIG
+from Chzzk_api import (
+    select_chzzk_vod, 
+    download_chzzk_vod_chats, 
+    write_chzzk_comment, 
+    CONFIG
+)
 from Timeline import (
     download_chzzk_vod_audio,
     transcribe_chzzk_audio,
