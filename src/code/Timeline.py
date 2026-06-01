@@ -1,6 +1,9 @@
 import sys
 import os
 
+os.environ["OMP_NUM_THREADS"] = "8" 
+os.environ["MKL_NUM_THREADS"] = "8"
+
 try:
     embed_bin_dir = os.path.dirname(sys.executable)
     site_packages_dir = os.path.join(embed_bin_dir, "Lib", "site-packages")
@@ -121,18 +124,12 @@ def load_config():
         sys.exit(1)
 
 def sanitize_chzzk_url(url: str) -> str:
-    """어떤 VOD 번호가 주어지든 마크다운 포맷(예: [text](url)id)을 동적으로 안전하게 파싱하여 순수 주소로 정제합니다."""
     if not url:
         return ""
-    
-    # 1. 마크다운 포맷 [텍스트](실제주소) 패턴 검사 및 실제 주소 추출
     markdown_match = re.search(r'\[.*?\]\((.*?)\)', url)
     if markdown_match:
         actual_url = markdown_match.group(1)
-        # 대괄호/소괄호 덩어리를 제외하고 바깥에 떨어져 남은 문자열(VOD ID) 확보
         remaining_str = re.sub(r'\[.*?\]\((.*?)\)', '', url).strip()
-        
-        # 괄호 외부에 VOD ID 문자열이 분리되어 존속하고 있다면 동적 결합
         if remaining_str and remaining_str not in actual_url:
             if not actual_url.endswith('/'):
                 url = actual_url + "/" + remaining_str
@@ -140,15 +137,11 @@ def sanitize_chzzk_url(url: str) -> str:
                 url = actual_url + remaining_str
         else:
             url = actual_url
-
-    # 2. 양끝 공백 및 기타 문자열 따옴표 등 노이즈 2차 정제
     url = url.strip().replace("'", "").replace('"', '')
     return url
 
 def get_video_duration(chzzk_url):
-    # 동적 URL 정제 적용
     chzzk_url = sanitize_chzzk_url(chzzk_url)
-    
     ydl_opts = {'quiet': True, 'nocheckcertificate': True}
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(chzzk_url, download=False)
@@ -161,30 +154,27 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
     specific_palette_dir = os.path.join(os.getcwd(), "voicepalette", f"VOD_{vod_id}")
     os.makedirs(specific_palette_dir, exist_ok=True)
     
-    master_audio_mp3 = os.path.join(specific_palette_dir, f"{output_filename}.mp3")
-    raw_master_tmpl = os.path.join(specific_palette_dir, "raw_master_stream")
+    master_audio_ts = os.path.join(specific_palette_dir, f"{output_filename}.ts")
     
-    if os.path.exists(master_audio_mp3) and os.path.getsize(master_audio_mp3) > 10240:
-        print(f"✨ [오디오 캐시 적중] 전체 원본 오디오 로드 완료: {master_audio_mp3}")
-        return master_audio_mp3
+    if os.path.exists(master_audio_ts) and os.path.getsize(master_audio_ts) > 102400:
+        print(f"✨ [오디오 캐시 적중] 전체 원본 TS 파일 로드 완료: {master_audio_ts}")
+        return master_audio_ts
+
+    if not os.path.exists(FFMPEG_PATH):
+        ffmpeg_bin = "ffmpeg"
+    else:
+        ffmpeg_bin = FFMPEG_PATH
 
     total_duration = get_video_duration(chzzk_url)
     if total_duration == 0:
         print("❌ VOD 메타데이터 파싱 실패.")
         return ""
 
-    if not os.path.exists(FFMPEG_PATH):
-        print(f"⚠️ [경고] 지정된 경로에 FFmpeg 바이너리가 없습니다: {FFMPEG_PATH}")
-        print("💡 시스템 기본 환경 변수의 ffmpeg 구동을 시도합니다.")
-        ffmpeg_bin = "ffmpeg"
-    else:
-        ffmpeg_bin = FFMPEG_PATH
-
     print(f"\n📡 [최초 1회 실행] 16개 스레드 비동기 전체 오디오 수집 개시...")
     
     ydl_opts = {
         'format': 'worstaudio/worst',
-        'outtmpl': f'{raw_master_tmpl}.%(ext)s',
+        'outtmpl': os.path.join(specific_palette_dir, f"{output_filename}.%(ext)s"),
         'keepvideo': False,
         'quiet': True,
         'nocheckcertificate': True,
@@ -200,32 +190,18 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(chzzk_url, download=True)
-            downloaded_ext = info_dict.get('ext', 'ts')
-            downloaded_raw_path = f"{raw_master_tmpl}.{downloaded_ext}"
+            ydl.extract_info(chzzk_url, download=True)
     except Exception as e:
         print(f"❌ 멀티스레드 다운로드 오류 발생: {e}")
         return ""
 
-    if not os.path.exists(downloaded_raw_path):
-        print("❌ 원본 오디오 마스터 스트림 파일 생성 실패.")
+    if not os.path.exists(master_audio_ts):
+        print("❌ 원본 오디오 TS 마스터 스트림 파일 생성 실패.")
         return ""
 
-    print("⚡ [로컬 가속] 비동기 수집 스트림을 마스터 MP3로 인코딩 중...")
-    cmd_master = [
-        ffmpeg_bin, '-y',
-        '-i', downloaded_raw_path,
-        '-acodec', 'libmp3lame',
-        '-b:a', '96k',
-        master_audio_mp3
-    ]
-    subprocess.run(cmd_master, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    print("✅ 원본 TS 오디오 캐시 빌드가 영구 보관되었습니다. (MP3 변환 생략)")
+    return master_audio_ts
 
-    if os.path.exists(downloaded_raw_path):
-        try: os.remove(downloaded_raw_path)
-        except: pass
-    print("✅ Base 마스터 MP3 캐시 빌드가 영구 보관되었습니다.")
-    return master_audio_mp3
 
 def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
     if os.path.exists(target_path) and os.path.getsize(target_path) > 10:
@@ -243,36 +219,42 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
     else:
         ffmpeg_bin = FFMPEG_PATH
 
+    specific_palette_dir = os.path.dirname(target_path)
+    chunk_pattern = os.path.join(specific_palette_dir, "temp_chunk_%03d.ts")
     chunk_length_sec = 3600
-    audio_dir = os.path.dirname(audio_path)
-    chunk_pattern = os.path.join(audio_dir, "temp_chunk_%03d.mp3")
     
-    for f in glob.glob(os.path.join(audio_dir, "temp_chunk_*.mp3")):
+    for f in glob.glob(os.path.join(specific_palette_dir, "temp_chunk_*.ts")):
         try: os.remove(f)
         except: pass
 
-    print("✂️ [가속 필터] 대용량 오디오 연산 폭발 방지를 위해 60분 단위 안전 청크로 분할 중...")
+    print("✂️ [오디오 가속] 긴 스트림을 60분 단위 순차 연산 청크로 분할 중...")
     cmd_split = [
         ffmpeg_bin, '-y', '-i', audio_path,
         '-f', 'segment', '-segment_time', str(chunk_length_sec),
-        '-c', 'copy', chunk_pattern
+        '-acodec', 'copy', chunk_pattern
     ]
     subprocess.run(cmd_split, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    chunk_files = sorted(glob.glob(os.path.join(audio_dir, "temp_chunk_*.mp3")))
+    chunk_files = sorted(glob.glob(os.path.join(specific_palette_dir, "temp_chunk_*.ts")))
     if not chunk_files:
-        print("❌ 오디오 청크 분할 과정에 실패했습니다.")
+        print("❌ 분할된 오디오 청크 파일이 존재하지 않습니다.")
         return ""
 
     try:
         from faster_whisper import WhisperModel
+        NUM_CPUS = 8 
         try:
             model = WhisperModel(model_size, device="cuda", compute_type="float16")
             print("🚀 [GPU 가속 성공] NVIDIA CUDA 백엔드로 순차 STT 연산을 시작합니다.")
         except Exception as gpu_error:
-            print(f"⚠️ GPU 로드 실패 ({gpu_error}). CPU 모드로 전환합니다.")
-            model = WhisperModel(model_size, device="cpu", compute_type="int8")
-            print("🐌 [CPU 전환 완료] CPU 환경에서 순차 대본 추출을 진행합니다.")
+            print(f"⚠️ GPU 로드 실패 ({gpu_error}). CPU 최적화 모드로 전환합니다.")
+            model = WhisperModel(
+                model_size, 
+                device="cpu", 
+                compute_type="int8",
+                cpu_threads=NUM_CPUS
+            )
+            print(f"🐌 [CPU 전환 완료] {NUM_CPUS}개 스레드를 활용해 최적화된 대본 추출을 진행합니다.")
             
     except ImportError:
         print("❌ faster-whisper 라이브러리가 설치되어 있지 않습니다.")
@@ -281,17 +263,29 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
     script_lines = []
     
     for idx, chunk_file in enumerate(chunk_files):
+        if os.path.getsize(chunk_file) < 1024:
+            continue
+            
         current_offset_secs = idx * chunk_length_sec
-        print(f"⏳ [STT 진행 중] {idx + 1}/{len(chunk_files)} 세그먼트 구간 연산 중...")
+        print(f"🎙️ [{idx+1}/{len(chunk_files)}] 청크 전사 연산 진행 중: {os.path.basename(chunk_file)}")
         
         segments, info = model.transcribe(
             chunk_file,
             language="ko",
-            beam_size=5,
+            beam_size=1,
+            best_of=1,
             word_timestamps=False,
             repetition_penalty=1.4,
             compression_ratio_threshold=1.8,
-            condition_on_previous_text=False
+            temperature=0,
+            condition_on_previous_text=False,
+            vad_filter=True,
+            vad_parameters=dict(
+                min_silence_duration_ms=500,
+                speech_pad_ms=100
+            ),
+            no_speech_threshold=0.5,
+            log_prob_threshold=-1.0
         )
         
         for segment in segments:
@@ -305,7 +299,7 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
             
             if text_content:
                 script_lines.append(f"{timestamp_str} {text_content}")
-                print(f"  {timestamp_str} {text_content}")
+                print(f"  {timestamp_str} {text_content}") # 실시간 콘솔 로그 출력 유도
 
     for chunk_file in chunk_files:
         try: os.remove(chunk_file)
@@ -402,7 +396,6 @@ def load_and_filter_streamers_db(input_script, streamers_db_path="chzzk_streamer
     return list(detected_members.keys())
 
 def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url="", api_key="", chunk_index=0):
-    # 동적 URL 정제 적용
     chzzk_url = sanitize_chzzk_url(chzzk_url)
 
     prompt_path = os.path.join(os.getcwd(), "prompt.txt")
@@ -427,7 +420,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
         "🚨 [시간 정밀 매칭 및 소주제 작성 절대 규칙]\n"
         "- 언제나 대괄호를 유지하며 대주제와 소주제를 분리한 '[대주제; 소주제]' 포맷을 단락 헤더 라인으로 고수하십시오.\n"
         "- **🚨 [소주제 내 스트리머 닉네임 박제 절대 금지]**: 소주제(topic) 영역에는 합방 멤버나 디코 참여자 등의 스트리머 닉네임을 괄호 포함 어떠한 형태로도 적지 마십시오. 오직 순수한 콘텐츠 명칭이나 제목, 게임 이름만 명료하게 나타내야 합니다. 예시: '배틀그라운드', '디스코드 소통' (절대 '배틀그라운드(스트리머)' 처럼 구성하지 마십시오.)\n"
-        "- **[스트리머 반응 최우선화 및 역산 싱크 제약]**: 시청자 채팅창 반응보다 스트리머가 먼저 오디오로 동일한 반응이나 상황 언급을 먼저 했다면, 무조건 스트리머가 소리를 내뱉은 그 최초의 시간(Timestamp) 지점을 찾아 동기화하십시오. 단, 사건 발생 시점보다 발언이 늦어 5~15초 정도의 시간 지연이 발생하는 하이라이트 장면의 경우, 의도적으로 타임스탬프를 10~15초 정도 앞당겨 실제 상황이 시작되는 시점에 맞추어 타임라인 데이터를 추출하십시오.\n"
+        "- **[스트리머 반응 최우선화 및 역산 싱크 제약]**: 시청자 채팅창 반응보다 스트리머가 먼저 오디오로 동일한 반응이나 상황 언급을 먼저 했다면, 무조건 스트리머가 소리를 내뱉은 그 최초의 시간(Timestamp) 지점을 찾아 동기화하십시오. 단, 사건 발생 시점보다 발언이 늦어 5~15초 정도의 시간 지연이 발생하는 하이라이트 장면의 경우, 의도적으로 타임스탬프를 3~5초 정도 살짝 앞당겨 실제 상황이 시작되는 시점에 맞추어 타임라인 데이터를 추출하십시오.\n"
         "- **[문장 초압축]**: 한눈에 들어오도록 각 라인의 content는 10~15자 내외로 극도로 짧게 작성하십시오.\n"
         "- **[내용 중복 금지]**: 각 아이템의 content 본문 내부에 단락 태그를 중복해서 절대 삽입하지 마십시오.\n\n"
         "🚨 [과거 회상 및 썰 풀기 시점 분리 강력 제약]\n"
@@ -524,7 +517,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
             for stt_sec, stt_text in streamer_stt_list:
                 if abs(current_secs - stt_sec) <= 15:
                     if keyword_candidate in stt_text:
-                        best_matched_sec = max(0, stt_sec - 10) if is_highlight else stt_sec
+                        best_matched_sec = max(0, stt_sec - 3) if is_highlight else stt_sec
                         break
                         
             if best_matched_sec != current_secs:
@@ -533,7 +526,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
             else:
                 for stt_sec, stt_text in streamer_stt_list:
                     if abs(current_secs - stt_sec) <= 5:
-                        best_matched_sec = max(0, stt_sec - 5) if is_highlight else stt_sec
+                        best_matched_sec = max(0, stt_sec - 3) if is_highlight else stt_sec
                         ts = seconds_to_timestamp(best_matched_sec)
                         current_secs = best_matched_sec
                         break
@@ -595,7 +588,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
             for stt_sec, stt_text in streamer_stt_list:
                 if abs(current_secs - stt_sec) <= 15:
                     if keyword_candidate in stt_text:
-                        best_matched_sec = max(0, stt_sec - 10)
+                        best_matched_sec = max(0, stt_sec - 3)
                         break
             
             if best_matched_sec != current_secs:
@@ -604,7 +597,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
             else:
                 for stt_sec, stt_text in streamer_stt_list:
                     if abs(current_secs - stt_sec) <= 5:
-                        best_matched_sec = max(0, stt_sec - 10)
+                        best_matched_sec = max(0, stt_sec - 3)
                         ts_val = seconds_to_timestamp(best_matched_sec)
                         current_secs = best_matched_sec
                         break
