@@ -4,6 +4,11 @@ import math
 import signal
 import re
 import glob
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
 from Chzzk_api import (
     select_chzzk_vod, 
     download_chzzk_vod_chats, 
@@ -16,6 +21,7 @@ from Timeline import (
     generate_chzzk_timeline,
     merge_and_format_final_timeline,
     timestamp_to_seconds,
+    correct_streamer_nicknames_with_gemini,
 )
 
 def parse_chat_timestamp_to_secs(chat_line):
@@ -115,7 +121,7 @@ def run_pure_test():
         print("❌ 유효한 치지직 VOD 일련번호를 획득하지 못했습니다.")
         return
 
-    full_vod_url = f"https://chzzk.naver.com/video/{vod_id}"
+    full_vod_url = f"[https://chzzk.naver.com/video/](https://chzzk.naver.com/video/){vod_id}"
     print(f"\n🎬 선택된 타겟 방송: [{actual_title}] (VOD ID: {vod_id})")
     
     try:
@@ -202,7 +208,16 @@ def run_pure_test():
         print("❌ Gemini AI가 정상적인 타임라인 항목 뼈대를 생성하지 못했습니다.")
         return
 
+    # 1. 1차 취합 데이터 문자열 빌드
     final_output_text = merge_and_format_final_timeline(all_raw_items)
+
+    # 🚨 [최종단계 Gemini 보정] 문맥 분석 권한을 위임받은 함수 호출 수행
+    print("⚙️  [최종 후처리] Gemini 모델을 활용한 문맥/유사도 기반 닉네임 교정 작업 수행 중...")
+    final_output_text = correct_streamer_nicknames_with_gemini(
+        timeline_text=final_output_text, 
+        api_key=GEMINI_API_KEY, 
+        db_filename="chzzk_streamers.txt"
+    )
 
     ai_notice = "🤖 이 댓글은 방송 하이라이트를 AI가 분석하여 생성한 타임라인으로 다소 부정확한 부분이 있을 수 있습니다."
     new_header = f"[00:00:00] {actual_title}"
@@ -254,7 +269,7 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
     
     print("==================================================")
-    print("        치지직 VOD 타임라인 매니저 프로그램        ")
+    print("        치지직 VOD 타임라인 매니저 ver 1.0        ")
     print("==================================================")
     print(" [1] AI 연산 실행하여 새 타임라인 파일 생성하기")
     print(" [2] 이미 만들어진 로컬 타임라인 파일 불러와 즉시 댓글 등록하기")
