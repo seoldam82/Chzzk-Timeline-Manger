@@ -183,31 +183,33 @@ def select_chzzk_vod(channel_id, limit=10):
         print("❌ 유효한 VOD가 없거나 채널 ID가 잘못되었습니다.")
         return None, None, 0
         
-    print("\n=========================================================================")
+    print("\n" + "="*75)
     print(f"🎬 최근 VOD 리스트 (총 {len(vod_list)}개 발견)")
-    print("=========================================================================")
+    print("="*75)
     for idx, video in enumerate(vod_list):
         title = video.get("videoTitle", "제목 없음")
         duration = video.get("duration", 0)
         hours = duration // 3600
         minutes = (duration % 3600) // 60
-        print(f"[{idx + 1}] {title} ({hours}시간 {minutes}분)")
-    print("=========================================================================")
+        print(f"[{idx + 1:2d}] {title} ({hours}시간 {minutes}분)")
+    print("="*75)
     
     while True:
         try:
-            user_input = input("\n👉 분석할 영상의 번호(인덱스)를 입력하세요: ").strip()
+            user_input = input(f"\n👉 분석할 영상의 번호를 입력하세요 (1~{len(vod_list)}): ").strip()
             selected_idx = int(user_input)
-            if 0 <= selected_idx < len(vod_list):
+            
+            if 1 <= selected_idx <= len(vod_list):
                 selected_video = vod_list[selected_idx - 1]
                 video_no = selected_video.get("videoNo")
                 video_title = selected_video.get("videoTitle", "방송다시보기")
                 video_duration = selected_video.get("duration", 0)
-                print(f"\n🎯 [선택 완료] {video_title} 분석을 진행합니다.")
+                print(f"\n🎯 [선택 완료] '{video_title}' 분석을 진행합니다.")
                 return str(video_no), video_title, video_duration
-            print("❌ 범위 안의 올바른 숫자를 입력하세요.")
+            
+            print(f"❌ 1에서 {len(vod_list)} 사이의 숫자를 입력해주세요.")
         except ValueError:
-            print("❌ 숫자만 입력 가능합니다.")
+            print("❌ 올바른 숫자를 입력해주세요.")
 
 def download_chzzk_vod_chats(video_no, start_sec, end_sec):
     print(f"💬 치지직 VOD 채팅 데이터 파싱 및 화력 압축 시작... ({int(start_sec)}초 ~ {int(end_sec)}초 구간)")
