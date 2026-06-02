@@ -178,9 +178,9 @@ CLI 인터페이스 및 전체 실행 흐름 담당
 
 5. 팝업창이 뜨면 두 가지 옵션 중 하나를 선택합니다:
 
-* Create API key in new project: 새로운 구글 클라우드 프로젝트를 생성하면서 키를 발급받습니다. (처음 하신다면 이 옵션이 가장 간단합니다.)
+   * Create API key in new project: 새로운 구글 클라우드 프로젝트를 생성하면서 키를 발급받습니다. (처음 하신다면 이 옵션이 가장 간단합니다.)
 
-* Create API key in existing project: 기존에 만들어 둔 구글 클라우드 프로젝트가 있다면 선택하여 연결합니다.
+   * Create API key in existing project: 기존에 만들어 둔 구글 클라우드 프로젝트가 있다면 선택하여 연결합니다.
 
 6. 잠시 기다리면 AIzaSy...로 시작하는 긴 문자열의 API 키가 생성됩니다.
 
