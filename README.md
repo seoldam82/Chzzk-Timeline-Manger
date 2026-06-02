@@ -1,6 +1,4 @@
-# 치지직 타임라인 매니저 
-
-# (Chzzk-Timeline-Manager)
+# 치지직 타임라인 매니저 (Chzzk-Timeline-Manager)
 
 치지직(CHZZK) 다시보기(VOD)의 음성 데이터와 실시간 채팅 화력을 분석하여, Gemini AI 기반 하이라이트 타임라인을 자동 생성하고 댓글까지 등록해주는 자동화 도구입니다.
 
