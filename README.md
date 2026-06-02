@@ -89,25 +89,7 @@ Gemini AI가 다음 구조로 방송 내용을 정리합니다.
 
 ## 💬 댓글 자동 등록
 
-타임라인 생성 후 치지직 댓글로 바로 등록할 수 있습니다.
-
-사용 방식:
-
-```json
-"NID_AUT": "",
-"NID_SES": ""
-```
-
-기본적으로 브라우저(Chrome/Edge)의 로그인 세션을 자동 탐색하며, 실패 시 직접 입력할 수 있습니다.
-
-다만 안정적인 구동을 위해 config.json에 쿠키 값을 직접 넣는 것을 권장합니다
-
-### 쿠키 추출 방법
-
-1. 네이버 또는 치지직 로그인
-2. F12 → Application → Cookies
-3. `https://chzzk.naver.com`
-4. `NID_AUT`, `NID_SES` 값 복사
+config.json에 입력된 `NID_AUT`, `NID_SES`로 타임라인 생성 후 치지직 댓글로 바로 등록할 수 있습니다.
 
 ---
 
@@ -149,7 +131,7 @@ CLI 인터페이스 및 전체 실행 흐름 담당
 
 ## config.json
 
-환경 설정 파일
+* 환경 설정 파일
 
 ---
 
@@ -159,14 +141,22 @@ CLI 인터페이스 및 전체 실행 흐름 담당
 
 ```json
 {
-    "TARGET_CHANNEL_ID": "치지직_채널_ID",
-    "GEMINI_API_KEY": "본인의_API_KEY",
-    "NID_AUT": "",
-    "NID_SES": "",
+    "TARGET_CHANNEL_ID": "치지직_32자리_채널_해시값",
+    "GEMINI_API_KEY": "본인의_GEMINI_API_KEY",
+    "NID_AUT": "네이버 쿠키에서 추출한 고유 인증 토큰 1",
+    "NID_SES": "네이버 쿠키에서 추출한 세션 인증 토큰 2",
     "WHISPER_LANGUAGE": "ko",
-    "WHISPER_MODEL": "turbo"
+    "WHISPER_MODEL": "base"
 }
+
 ```
+
+### 쿠키 추출 방법
+
+1. 네이버 또는 치지직 로그인
+2. F12 → Application → Cookies
+3. `https://chzzk.naver.com`
+4. `NID_AUT`, `NID_SES` 값 복사
 
 # 🛠️ Prompt 커스텀
 
