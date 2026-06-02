@@ -1,8 +1,8 @@
 {
     "TARGET_CHANNEL_ID": "치지직_32자리_채널_해시값",
     "GEMINI_API_KEY": "본인의_GEMINI_API_KEY",
-    "NID_AUT": "",
-    "NID_SES": "",
+    "NID_AUT": "네이버 쿠키에서 추출한 고유 인증 토큰 1",
+    "NID_SES": "네이버 쿠키에서 추출한 세션 인증 토큰 2",
     "WHISPER_LANGUAGE": "ko",
     "WHISPER_MODEL": "base"
 }
