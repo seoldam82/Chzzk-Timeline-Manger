@@ -76,7 +76,7 @@ Gemini AI가 다음 구조로 방송 내용을 정리합니다.
 
 ```text
 [대주제; 소주제]
-[타임스탬프] - 내용
+[타임스탬프] 내용
 ```
 
 예시:
@@ -277,7 +277,7 @@ PATH 등록 필요
 pip install -r requirements.txt
 ```
 
-# 🔥 CUDA 환경에서 PyTorch 재설치 (GPU 가속 필수)
+# 🔥 엔비디아 CUDA 환경에서 PyTorch 재설치 (GPU 가속 권장)
 
 Faster-Whisper 및 AI 연산 속도를 제대로 활용하려면 CUDA가 활성화된 PyTorch 환경을 사용하는 것을 권장합니다.
 
@@ -338,14 +338,6 @@ python Main.py
 | ------- | ----- |
 | RTX GPU | 매우 빠름 |
 | CPU     | 느림    |
-
-긴 방송도:
-
-* 청크 분할
-* 캐싱
-* 부분 분석
-
-구조로 안정 처리합니다.
 
 ---
 
