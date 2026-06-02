@@ -158,11 +158,11 @@ CLI 인터페이스 및 전체 실행 흐름 담당
 ### 채널 해시값 추출 방법
 
 1. 치지직에서 해시값을 찾고자 하는 스트리머의 채널(홈)로 이동합니다.
-2. https://chzzk.naver.com/(이 부분에 영문과 숫자로 된 긴 코드가 있습니다)
+2. `https://chzzk.naver.com/(이 부분에 영문과 숫자로 된 긴 코드가 있습니다)`
 
 예시)
 
-`https://chzzk.naver.com/live/abc123xyz45667890faeebccddeeff12`
+`https://chzzk.naver.com/abc123xyz45667890faeebccddeeff12`
 
 해시값: `abc123xyz45667890faeebccddeeff12`
 
