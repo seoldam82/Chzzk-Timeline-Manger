@@ -1,6 +1,9 @@
 import sys
 import os
 
+import sys
+import os
+
 os.environ["OMP_NUM_THREADS"] = "8" 
 os.environ["MKL_NUM_THREADS"] = "8"
 
@@ -16,10 +19,26 @@ try:
         nvidia_base = os.path.join(site_packages_dir, "nvidia")
         if os.path.exists(nvidia_base):
             for root, dirs, files in os.walk(nvidia_base):
-                if root.endswith("bin"): 
-                    os.add_dll_directory(root)
+                if any(f.lower().endswith('.dll') for f in files):
+                    try:
+                        os.add_dll_directory(root)
+                    except:
+                        pass
+                    if root not in os.environ["PATH"]:
+                        os.environ["PATH"] = root + os.pathsep + os.environ["PATH"]
+
+        for folder in os.listdir(site_packages_dir):
+            if folder.startswith("nvidia_") and "cu12" in folder:
+                bin_path = os.path.join(site_packages_dir, folder, "bin")
+                if os.path.exists(bin_path):
+                    try: os.add_dll_directory(bin_path)
+                    except: pass
+                    if bin_path not in os.environ["PATH"]:
+                        os.environ["PATH"] = bin_path + os.pathsep + os.environ["PATH"]
+                    
 except Exception as dll_error:
-    pass
+    print(f"⚠️ DLL 디렉토리 자동 등록 중 오류 발생: {dll_error}")
+
 
 import json
 import warnings
