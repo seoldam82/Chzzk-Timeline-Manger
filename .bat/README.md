@@ -27,3 +27,20 @@ NVIDIA 그래픽 카드를 사용하시는 경우 아래 사항을 확인해 주
 ### 메모리(VRAM) 확보
 
 AI 연산 도중 `Out of Memory` 에러가 발생한다면 실행 중인 고사양 게임이나 비디오 렌더러 프로그램을 잠시 종료한 뒤 재시도해 주세요.
+
+---
+
+🛠️ FFmpeg 수동 설치 가이드 (자동 다운로드 실패 시)
+프로그램 실행 시 FFmpeg 다운로드 단계에서 멈추거나 에러가 발생한다면, 아래 순서대로 직접 다운로드하여 폴더를 배치해 주세요.
+
+1단계: 공식 빌드 파일 다운로드
+
+[Gyan.dev FFmpeg 다운로드 링크](https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip)를 클릭하여 압축 파일을 다운로드합니다.
+
+2단계: 압축 해제 및 폴더 이름 변경
+
+다운로드한 ffmpeg-release-essentials.zip 파일의 압축을 풉니다.
+
+압축을 풀면 ffmpeg-7.x.x-essentials_build와 같이 버전 이름이 들어간 폴더가 나옵니다.
+
+이 폴더의 이름을 **ffmpeg**로 변경한 뒤 프로젝트 폴더 내에 넣어주세요. (대소문자 무관, 하이픈이나 버전 숫자 제거)
