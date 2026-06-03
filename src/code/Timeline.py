@@ -202,7 +202,7 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
     
     ydl_opts = {
         'format': 'bestaudio/worst',
-        'outtmpl': os.path.join(specific_palette_dir, f"{output_filename}.%(ext)s"),
+        'outtmpl': os.path.join(specific_palette_dir, f"{output_filename}.ts"),
         'keepvideo': False,
         'nocheckcertificate': True,
         'noplaylist': True,
@@ -213,6 +213,7 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
         'skip_unavailable_fragments': True,
         'http_chunk_size': 5242880,  
         'ffmpeg_location': ffmpeg_bin, 
+        'fixup': 'never',
         'postprocessors': [],
     }
 
