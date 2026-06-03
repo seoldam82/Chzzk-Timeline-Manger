@@ -171,6 +171,15 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
     chzzk_url = sanitize_chzzk_url(chzzk_url)
 
     specific_palette_dir = os.path.join(os.getcwd(), "voicepalette", f"VOD_{vod_id}")
+    try:
+        os.makedirs(specific_palette_dir, exist_ok=True)
+    except PermissionError:
+        print(f"❌ [권한 오류] '{specific_palette_dir}' 폴더를 생성할 권한이 없습니다. 관리자 권한으로 실행하세요.")
+        return ""
+    except Exception as e:
+        print(f"❌ [폴더 생성 실패] {e}")
+        return ""
+    
     os.makedirs(specific_palette_dir, exist_ok=True)
     
     master_audio_ts = os.path.join(specific_palette_dir, f"{output_filename}.ts")
@@ -189,38 +198,54 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
         print("❌ VOD 메타데이터 파싱 실패.")
         return ""
 
-    print(f"\n📡 [최초 1회 실행] 16개 스레드 비동기 전체 오디오 수집 개시...")
+    print(f"\n📡 [최초 1회 실행] 멀티스레드 오디오 수집 개시...")
     
     ydl_opts = {
-        'format': 'worstaudio/worst',
+        'format': 'bestaudio/worst',
         'outtmpl': os.path.join(specific_palette_dir, f"{output_filename}.%(ext)s"),
         'keepvideo': False,
-        'quiet': True,
         'nocheckcertificate': True,
         'noplaylist': True,
         'concurrent_fragment_downloads': 16,
-        'socket_timeout': 30,
-        'retries': 15,
-        'fragment_retries': 20,
-        'skip_unavailable_fragments': False,
-        'http_chunk_size': 10485760,
+        'socket_timeout': 60,  
+        'retries': 20,
+        'fragment_retries': 30,
+        'skip_unavailable_fragments': True,
+        'http_chunk_size': 5242880,  
         'ffmpeg_location': ffmpeg_bin, 
+        'postprocessors': [],
     }
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
             ydl.extract_info(chzzk_url, download=True)
     except Exception as e:
-        print(f"❌ 멀티스레드 다운로드 오류 발생: {e}")
-        return ""
+        print(f"⚠️ 멀티스레드 다운로드 중 예외 발생 (확인 프로세스 진행): {e}")
 
     if not os.path.exists(master_audio_ts):
+        extensions = ['*.ts', '*.m4a', '*.aac', '*.mp3']
+        found_files = []
+        for ext in extensions:
+            found_files.extend(glob.glob(os.path.join(specific_palette_dir, f"{output_filename}{ext}")))
+        
+        if found_files:
+            downloaded_file = found_files[0]
+            if not downloaded_file.endswith('.ts'):
+                print(f"📦 다운로드된 파일 포맷 감지 ({os.path.basename(downloaded_file)}) -> TS 컨테이너로 재정렬 중...")
+                cmd_convert = [
+                    ffmpeg_bin, '-y', '-i', downloaded_file,
+                    '-acodec', 'copy', master_audio_ts
+                ]
+                subprocess.run(cmd_convert, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try: os.remove(downloaded_file)
+                except: pass
+
+    if not os.path.exists(master_audio_ts) or os.path.getsize(master_audio_ts) < 1024:
         print("❌ 원본 오디오 TS 마스터 스트림 파일 생성 실패.")
         return ""
 
-    print("✅ 원본 TS 오디오 캐시 빌드가 영구 보관되었습니다. (MP3 변환 생략)")
+    print("✅ 원본 TS 오디오 캐시 빌드가 영구 보관되었습니다.")
     return master_audio_ts
-
 
 def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
     if os.path.exists(target_path) and os.path.getsize(target_path) > 10:
@@ -318,7 +343,7 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
             
             if text_content:
                 script_lines.append(f"{timestamp_str} {text_content}")
-                print(f"  {timestamp_str} {text_content}") # 실시간 콘솔 로그 출력 유도
+                print(f"  {timestamp_str} {text_content}") 
 
     for chunk_file in chunk_files:
         try: os.remove(chunk_file)
