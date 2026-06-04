@@ -92,7 +92,7 @@ def process_direct_comment_mode():
         print("💡 텍스트 파일을 직접 열어 내용을 5000자 이내로 줄여주신 다음 다시 시도해 주세요.")
         return
 
-    answer = input(f"\n🚀 이 타임라인을 VOD [{vod_id}]번에 즉시 반영(등록/수정)할까요? (y/n): ").strip().lower()
+    answer = input(f"\n🚀 이 타임라인을 VOD [{vod_id}]번에 즉시 반영할까요? (y/n): ").strip().lower()
     if answer == 'y':
         write_chzzk_comment(video_no=vod_id, comment_text=comment_content)
     else:
@@ -111,7 +111,7 @@ def run_pure_test():
     if not GEMINI_API_KEY or GEMINI_API_KEY.strip() == "":
         print("❌ Gemini API 키가 설정되지 않았습니다. config.json 파일의 'GEMINI_API_KEY' 항목을 확인하세요.")
         return
-
+    
     voicepalette_BASE_DIR = "./voicepalette"
     if not os.path.exists(voicepalette_BASE_DIR):
         os.makedirs(voicepalette_BASE_DIR)
