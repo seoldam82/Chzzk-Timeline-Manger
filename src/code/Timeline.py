@@ -257,7 +257,7 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
         try: os.remove(f)
         except: pass
 
-    print("✂️ [오디오 가속] 긴 스트림을 60분 단위 순차 연산 청크로 분할 중...")
+    print("✂️ [오디오 가속] 전체 스트림을 60분 단위 순차 연산 청크로 분할 중...")
     cmd_split = [
         ffmpeg_bin, '-y', '-i', audio_path,
         '-f', 'segment', '-segment_time', str(chunk_length_sec),
@@ -425,7 +425,7 @@ def load_and_filter_streamers_db(input_script, streamers_db_path="chzzk_streamer
 
     return list(detected_members.keys())
 
-def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url="", api_key="", chunk_index=0):
+def generate_chzzk_timeline(input_script, chat_script="", actual_title="VOD제목", chzzk_url="", api_key="", chunk_index=0):
     chzzk_url = sanitize_chzzk_url(chzzk_url)
 
     prompt_path = os.path.join(os.getcwd(), "prompt.txt")
@@ -477,7 +477,8 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
         f"🎯 [방송 진행 주인공 스트리머]: {target_streamer}\n"
         f"📢 [참고용 실제 참여/언급 스트리머 목록]: {collab_text_guide}\n"
         f"🚨 [강제 제약 사항]: 소주제(topic)에는 위 목록에 있는 인물을 포함하여 그 어떤 사람의 닉네임도 적지 마십시오.\n\n"
-        f"[데이터 원본]\n{input_script}"
+        f"[오디오 STT 데이터 원본]\n{input_script}\n\n"
+        f"[시청자 실시간 채팅 데이터 원본]\n{chat_script}"
     )
     
     max_retries = 5

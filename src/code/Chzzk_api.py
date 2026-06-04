@@ -212,113 +212,145 @@ def select_chzzk_vod(channel_id, limit=10):
             print("❌ 올바른 숫자를 입력해주세요.")
 
 def download_chzzk_vod_chats(video_no, start_sec, end_sec):
-    print(f"💬 치지직 VOD 채팅 데이터 파싱 및 화력 압축 시작... ({int(start_sec)}초 ~ {int(end_sec)}초 구간)")
-    url = f"https://api.chzzk.naver.com/service/v1/videos/{video_no}/chats"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-        "Origin": "https://chzzk.naver.com",
-        "Referer": f"https://chzzk.naver.com/video/{video_no}"
-    }
+    cache_dir = os.path.join(os.getcwd(), "chat_cache", str(video_no))
+    os.makedirs(cache_dir, exist_ok=True)
     
-    current_time_ms = int(start_sec * 1000)
-    end_time_ms = int(end_sec * 1000)
-    time_blocks = defaultdict(list)
-    next_page_token = None
+    full_cache_filename = f"chat_{video_no}_full.txt"
+    full_cache_path = os.path.join(cache_dir, full_cache_filename)
     
-    while current_time_ms < end_time_ms:
-        params = {"playerMessageTime": current_time_ms, "size": 100}
-        if next_page_token:
-            params["pageToken"] = next_page_token
-            
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=10)
-            if response.status_code != 200: break
-            data = response.json()
-            if data.get("code") != 200: break
+    if not os.path.exists(full_cache_path):
+        print(f"💬 치지직 VOD [{video_no}] 전체 채팅 데이터 최초 다운로드 및 화력 압축 시작...")
+        url = f"https://api.chzzk.naver.com/service/v1/videos/{video_no}/chats"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Origin": "https://chzzk.naver.com",
+            "Referer": f"https://chzzk.naver.com/video/{video_no}"
+        }
+        
+        current_time_ms = 0
+        time_blocks = defaultdict(list)
+        next_page_token = None
+        
+        while True:
+            params = {"playerMessageTime": current_time_ms, "size": 100}
+            if next_page_token:
+                params["pageToken"] = next_page_token
                 
-            content = data.get("content", {})
-            video_chats = content.get("videoChats", [])
-            if not video_chats:
-                current_time_ms += 10000
-                next_page_token = None
-                continue
-                
-            last_chat_time = current_time_ms
-            for chat in video_chats:
-                msg_time_ms = chat.get("playerMessageTime", 0)
-                if msg_time_ms > end_time_ms: break
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                if response.status_code != 200: break
+                data = response.json()
+                if data.get("code") != 200: break
                     
-                last_chat_time = msg_time_ms
-                message = chat.get("content", "").strip()
+                content = data.get("content", {})
+                video_chats = content.get("videoChats", [])
+                if not video_chats:
+                    current_time_ms += 10000
+                    next_page_token = None
+                    continue
+                    
+                last_chat_time = current_time_ms
+                for chat in video_chats:
+                    msg_time_ms = chat.get("playerMessageTime", 0)
+                    last_chat_time = msg_time_ms
+                    message = chat.get("content", "").strip()
+                    
+                    if message:
+                        chat_sec = msg_time_ms // 1000
+                        block_index = chat_sec // 10 
+                        time_blocks[block_index].append((chat_sec, message))
                 
-                if message:
-                    chat_sec = msg_time_ms // 1000
-                    block_index = chat_sec // 10 
-                    time_blocks[block_index].append((chat_sec, message))
-            
-            meta = content.get("meta", {})
-            next_page_token = meta.get("nextPageToken")
-            
-            if not next_page_token or last_chat_time <= current_time_ms:
-                current_time_ms = max(current_time_ms + 1000, last_chat_time + 1)
-                next_page_token = None
-            else:
-                current_time_ms = last_chat_time + 1
+                meta = content.get("meta", {})
+                next_page_token = meta.get("nextPageToken")
                 
-        except Exception:
-            break
+                if not next_page_token or last_chat_time <= current_time_ms:
+                    current_time_ms = max(current_time_ms + 1000, last_chat_time + 1)
+                    next_page_token = None
+                else:
+                    current_time_ms = last_chat_time + 1
+                    
+            except Exception:
+                break
 
-    if not time_blocks:
-        return "이 구간에는 실시간 채팅 기록이 존재하지 않습니다."
+        if not time_blocks:
+            return "이 구간에는 실시간 채팅 기록이 존재하지 않습니다."
 
-    total_blocks = len(time_blocks)
-    total_chats_count = sum(len(chats) for chats in time_blocks.values())
-    avg_chats_per_block = total_chats_count / total_blocks if total_blocks > 0 else 1
+        total_blocks = len(time_blocks)
+        total_chats_count = sum(len(chats) for chats in time_blocks.values())
+        avg_chats_per_block = total_chats_count / total_blocks if total_blocks > 0 else 1
+        
+        compressed_lines = []
+        consecutive_laugh_count = 0
+
+        for block_idx in sorted(time_blocks.keys()):
+            chats_in_block = time_blocks[block_idx]
+            block_firepower = len(chats_in_block)
+            
+            is_high_tension = block_firepower > (avg_chats_per_block * 1.5)
+            sample_size = 3 if is_high_tension else 1
+            
+            unique_chats = []
+            seen_messages = set()
+            for sec, msg in chats_in_block:
+                clean_msg = re.sub(r'\{?:[a-zA-Z0-9_]+:\}?', '', msg).strip()
+                clean_msg = clean_msg.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'")
+                clean_msg = clean_msg.replace('\n', ' ').replace('\r', ' ')
+                
+                clean_text = re.sub(r'[^가-힣a-zA-Z0-9ㅋㅎ]', '', clean_msg).strip()
+                is_pure_laugh = bool(re.match(r'^[ㅋㅎ]+$', clean_text)) if clean_text else False
+                
+                if is_pure_laugh:
+                    if consecutive_laugh_count >= 1: continue
+                    consecutive_laugh_count += 1
+                else:
+                    consecutive_laugh_count = 0
+
+                clean_msg = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', clean_msg)
+                clean_msg = re.sub(r'ㅎ{4,}', 'ㅎㅎㅎ', clean_msg)
+
+                if not clean_msg.strip(): continue
+
+                short_msg = clean_msg[:10]
+                if short_msg not in seen_messages:
+                    unique_chats.append((sec, clean_msg))
+                    seen_messages.add(short_msg)
+                    if len(unique_chats) >= sample_size: break
+            
+            for sec, msg in unique_chats:
+                h = sec // 3600
+                m = (sec % 3600) // 60
+                s = sec % 60
+                tension_tag = " 🔥" if is_high_tension and unique_chats.index((sec, msg)) == 0 else ""
+                compressed_lines.append(f"[{h:02d}:{m:02d}:{s:02d}]{tension_tag} {msg}")
+
+        final_compressed_chat = "\n".join(compressed_lines)
+        
+        try:
+            with open(full_cache_path, "w", encoding="utf-8") as f:
+                f.write(final_compressed_chat)
+            print(f"💾 [캐시 저장 완료] VOD 전체 통합 캐시 파일 생성이 완료되었습니다: {os.path.join('chat_cache', str(video_no), full_cache_filename)}")
+        except Exception as save_err:
+            print(f"⚠️ [캐시 저장 오류] 통합 캐시 파일을 생성하지 못했습니다: {save_err}")
+
+    try:
+        with open(full_cache_path, "r", encoding="utf-8") as f:
+            full_chat_text = f.read()
+    except Exception as read_err:
+        print(f"⚠️ [Cache Read Error] 통합 캐시 파일을 읽을 수 없습니다: {read_err}")
+        return "채팅 캐시 로드 실패"
+
+    print(f"📁 [캐시 슬라이싱] 통합 캐시에서 구간 슬라이싱 중... ({int(start_sec)}초 ~ {int(end_sec)}초)")
     
-    compressed_lines = []
-    consecutive_laugh_count = 0
-
-    for block_idx in sorted(time_blocks.keys()):
-        chats_in_block = time_blocks[block_idx]
-        block_firepower = len(chats_in_block)
+    sliced_lines = []
+    for line in full_chat_text.splitlines():
+        match = re.match(r"^\[(\d{2}):(\d{2}):(\d{2})\]", line)
+        if match:
+            h, m, s = map(int, match.groups())
+            line_sec = h * 3600 + m * 60 + s
+            if start_sec <= line_sec <= end_sec:
+                sliced_lines.append(line)
+                
+    if not sliced_lines:
+        return "이 구간에는 실시간 채팅 기록이 존재하지 않습니다."
         
-        is_high_tension = block_firepower > (avg_chats_per_block * 1.5)
-        sample_size = 3 if is_high_tension else 1
-        
-        unique_chats = []
-        seen_messages = set()
-        for sec, msg in chats_in_block:
-            clean_msg = re.sub(r'\{?:[a-zA-Z0-9_]+:\}?', '', msg).strip()
-            clean_msg = clean_msg.replace('\\', '\\\\').replace('"', '\\"').replace("'", "\\'")
-            clean_msg = clean_msg.replace('\n', ' ').replace('\r', ' ')
-            
-            clean_text = re.sub(r'[^가-힣a-zA-Z0-9ㅋㅎ]', '', clean_msg).strip()
-            is_pure_laugh = bool(re.match(r'^[ㅋㅎ]+$', clean_text)) if clean_text else False
-            
-            if is_pure_laugh:
-                if consecutive_laugh_count >= 1: continue
-                consecutive_laugh_count += 1
-            else:
-                consecutive_laugh_count = 0
-
-            clean_msg = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', clean_msg)
-            clean_msg = re.sub(r'ㅎ{4,}', 'ㅎㅎㅎ', clean_msg)
-
-            if not clean_msg.strip(): continue
-
-            short_msg = clean_msg[:10]
-            if short_msg not in seen_messages:
-                unique_chats.append((sec, clean_msg))
-                seen_messages.add(short_msg)
-                if len(unique_chats) >= sample_size: break
-        
-        for sec, msg in unique_chats:
-            h = sec // 3600
-            m = (sec % 3600) // 60
-            s = sec % 60
-            tension_tag = " 🔥" if is_high_tension and unique_chats.index((sec, msg)) == 0 else ""
-            compressed_lines.append(f"[{h:02d}:{m:02d}:{s:02d}]{tension_tag} {msg}")
-
-    final_compressed_chat = "\n".join(compressed_lines)
-    print(f"✅ 압축 최적화 완료: 입력 토큰 대상 채팅을 총 {len(compressed_lines)}줄로 슬림화했습니다.")
-    return final_compressed_chat
+    return "\n".join(sliced_lines)

@@ -202,6 +202,7 @@ def run_pure_test():
         print(f"🚀 Gemini AI 원격 모델 호출 중 (청크 인덱스: {chunk_index})...")
         chunk_items = generate_chzzk_timeline(
             input_script=chunk_transcription_text,
+            chat_script=compressed_chat_data,
             actual_title=actual_title,
             chzzk_url=full_vod_url,
             api_key=GEMINI_API_KEY,
