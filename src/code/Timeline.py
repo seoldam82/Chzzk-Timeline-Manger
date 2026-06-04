@@ -1,8 +1,18 @@
 import sys
 import os
-
-import sys
-import os
+import json
+import warnings
+import subprocess
+import re
+import time
+import glob
+from datetime import datetime, timedelta
+from yt_dlp import YoutubeDL
+from google import genai
+from google.genai import types
+from google.genai.errors import APIError
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 os.environ["OMP_NUM_THREADS"] = "8" 
 os.environ["MKL_NUM_THREADS"] = "8"
@@ -38,21 +48,6 @@ try:
                     
 except Exception as dll_error:
     print(f"⚠️ DLL 디렉토리 자동 등록 중 오류 발생: {dll_error}")
-
-
-import json
-import warnings
-import subprocess
-import re
-import time
-import glob
-from datetime import datetime, timedelta
-from yt_dlp import YoutubeDL
-from google import genai
-from google.genai import types
-from google.genai.errors import APIError
-from pydantic import BaseModel, Field
-from typing import List, Optional
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -156,8 +151,7 @@ def sanitize_chzzk_url(url: str) -> str:
                 url = actual_url + remaining_str
         else:
             url = actual_url
-    url = url.strip().replace("'", "").replace('"', '')
-    return url
+    return url.strip().replace("'", "").replace('"', '')
 
 def get_video_duration(chzzk_url):
     chzzk_url = sanitize_chzzk_url(chzzk_url)
@@ -169,8 +163,8 @@ def get_video_duration(chzzk_url):
 
 def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"):
     chzzk_url = sanitize_chzzk_url(chzzk_url)
-
     specific_palette_dir = os.path.join(os.getcwd(), "voicepalette", f"VOD_{vod_id}")
+    
     try:
         os.makedirs(specific_palette_dir, exist_ok=True)
     except PermissionError:
@@ -180,18 +174,13 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
         print(f"❌ [폴더 생성 실패] {e}")
         return ""
     
-    os.makedirs(specific_palette_dir, exist_ok=True)
-    
     master_audio_ts = os.path.join(specific_palette_dir, f"{output_filename}.ts")
     
     if os.path.exists(master_audio_ts) and os.path.getsize(master_audio_ts) > 102400:
         print(f"✨ [오디오 캐시 적중] 전체 원본 TS 파일 로드 완료: {master_audio_ts}")
         return master_audio_ts
 
-    if not os.path.exists(FFMPEG_PATH):
-        ffmpeg_bin = "ffmpeg"
-    else:
-        ffmpeg_bin = FFMPEG_PATH
+    ffmpeg_bin = FFMPEG_PATH if os.path.exists(FFMPEG_PATH) else "ffmpeg"
 
     total_duration = get_video_duration(chzzk_url)
     if total_duration == 0:
@@ -202,7 +191,7 @@ def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"
     
     ydl_opts = {
         'format': 'bestaudio/worst',
-        'outtmpl': os.path.join(specific_palette_dir, f"{output_filename}.ts"),
+        'outtmpl': master_audio_ts,
         'keepvideo': False,
         'nocheckcertificate': True,
         'noplaylist': True,
@@ -259,11 +248,7 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
         print("❌ 분석할 오디오 파일이 존재하지 않습니다.")
         return ""
 
-    if not os.path.exists(FFMPEG_PATH):
-        ffmpeg_bin = "ffmpeg"
-    else:
-        ffmpeg_bin = FFMPEG_PATH
-
+    ffmpeg_bin = FFMPEG_PATH if os.path.exists(FFMPEG_PATH) else "ffmpeg"
     specific_palette_dir = os.path.dirname(target_path)
     chunk_pattern = os.path.join(specific_palette_dir, "temp_chunk_%03d.ts")
     chunk_length_sec = 3600
@@ -351,7 +336,6 @@ def transcribe_chzzk_audio(audio_path, target_path, model_size="base"):
         except: pass
 
     raw_script = "\n".join(script_lines)
-    
     with open(target_path, "w", encoding="utf-8") as f:
         f.write(raw_script)
         
@@ -430,13 +414,14 @@ def load_and_filter_streamers_db(input_script, streamers_db_path="chzzk_streamer
     has_collab_context = any(keyword in input_script for keyword in collab_context_keywords)
 
     detected_members = {}
-    for streamer_name in registered_streamers:
-        if streamer_name == target_streamer or streamer_name in EXCLUDE_KEYWORDS:
-            continue 
-            
-        count = len(re.findall(re.escape(streamer_name), input_script))
-        if count >= 3 and has_collab_context:  
-            detected_members[streamer_name] = count
+    if has_collab_context:
+        for streamer_name in registered_streamers:
+            if streamer_name == target_streamer:
+                continue 
+                
+            count = len(re.findall(re.escape(streamer_name), input_script))
+            if count >= 3:  
+                detected_members[streamer_name] = count
 
     return list(detected_members.keys())
 
@@ -531,8 +516,6 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
     try:
         data = json.loads(response_json_text, strict=False)
         items = data.get("items", []) if isinstance(data, dict) else []
-        if not items and isinstance(data, dict) and "timeline" in data:
-            items = data.get("timeline", [])
 
         for item in items:
             gl = item.get("group_large", "").strip()
@@ -549,45 +532,42 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
                     continue
 
             talk_keywords = ["언급", "회상", "기억", "추억", "예전", "지난 방송", "이야기", "썰", "얘기", "토크"]
-            if any(word in topic or word in content_val for word in talk_keywords):
-                if gl == "게임 방송":
-                    gl = "저스트 채팅"
-                    topic = "과거 합방 언급 및 토크"
+            if gl == "게임 방송" and any(word in topic or word in content_val for word in talk_keywords):
+                gl = "저스트 채팅"
+                topic = "과거 합방 언급 및 토크"
 
             current_secs = timestamp_to_seconds(ts)
             best_matched_sec = current_secs
             keyword_candidate = content_val[:4] if len(content_val) >= 4 else content_val
             
             is_highlight = (wf >= 35 or wi >= 35)
+            matched_flag = False
             for stt_sec, stt_text in streamer_stt_list:
-                if abs(current_secs - stt_sec) <= 15:
-                    if keyword_candidate in stt_text:
-                        best_matched_sec = max(0, stt_sec - 3) if is_highlight else stt_sec
-                        break
+                if abs(current_secs - stt_sec) <= 15 and keyword_candidate in stt_text:
+                    best_matched_sec = max(0, stt_sec - 3) if is_highlight else stt_sec
+                    matched_flag = True
+                    break
                         
-            if best_matched_sec != current_secs:
-                ts = seconds_to_timestamp(best_matched_sec)
-                current_secs = best_matched_sec
-            else:
+            if not matched_flag:
                 for stt_sec, stt_text in streamer_stt_list:
                     if abs(current_secs - stt_sec) <= 5:
                         best_matched_sec = max(0, stt_sec - 3) if is_highlight else stt_sec
-                        ts = seconds_to_timestamp(best_matched_sec)
-                        current_secs = best_matched_sec
                         break
+
+            if best_matched_sec != current_secs:
+                ts = seconds_to_timestamp(best_matched_sec)
+                current_secs = best_matched_sec
             
             if current_secs > 1800:
                 if gl in ["오프닝", "방송시작", "방송 시작"]: 
                     gl = "저스트 채팅"
-                if "시작" in topic or "오프닝" in topic or "인사" in topic:
+                if any(x in topic for x in ["시작", "오프닝", "인사"]):
                     topic = "방송 잡담 및 일상 공유"
             
             if any(x in topic for x in ["소통", "시청자 리액션", "리액션", "티키타카"]):
                 topic = "방송 잡담 및 일상 공유"
                 
-            wt = wf + wi
-            
-            if wt >= 40 or wi >= 25:
+            if wf + wi >= 40 or wi >= 25:
                 cleaned_content = re.sub(r"\s*\(\s*\d+\s*단계\s*\)\s*", " ", content_val).strip()
                 cleaned_content = cleaned_content.replace("[채팅폭발]", "").strip()
                 cleaned_content = re.sub(r"\[\s*[^\]]+;\s*[^\]]+\s*\]", "", cleaned_content).strip()
@@ -596,8 +576,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
                 if not pure_text or re.match(r"^[><!?\s\"']+$", pure_text) or re.match(r"^ㅋ+$", pure_text):
                     continue
 
-                cleaned_content = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', cleaned_content)
-                cleaned_content = cleaned_content.replace("전개.", "").replace("수행.", "").strip()
+                cleaned_content = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', cleaned_content).replace("전개.", "").replace("수행.", "").strip()
                 
                 raw_items.append({
                     "seconds": current_secs,
@@ -621,36 +600,35 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
                     continue
 
             talk_keywords = ["언급", "회상", "기억", "추억", "예전", "지난 방송", "이야기", "썰", "얘기", "토크"]
-            if any(word in topic_val or word in content_val for word in talk_keywords):
-                if gl_val in ["ゲーム 방송", "게임 방송"]:
-                    gl_val = "저스트 채팅"
-                    topic_val = "과거 합방 언급 및 토크"
+            if gl_val in ["ゲーム 방송", "게임 방송"] and any(word in topic_val or word in content_val for word in talk_keywords):
+                gl_val = "저스트 채팅"
+                topic_val = "과거 합방 언급 및 토크"
 
             current_secs = timestamp_to_seconds(ts_val)
             best_matched_sec = current_secs
             keyword_candidate = content_val[:4] if len(content_val) >= 4 else content_val
             
+            matched_flag = False
             for stt_sec, stt_text in streamer_stt_list:
-                if abs(current_secs - stt_sec) <= 15:
-                    if keyword_candidate in stt_text:
-                        best_matched_sec = max(0, stt_sec - 3)
-                        break
+                if abs(current_secs - stt_sec) <= 15 and keyword_candidate in stt_text:
+                    best_matched_sec = max(0, stt_sec - 3)
+                    matched_flag = True
+                    break
             
-            if best_matched_sec != current_secs:
-                ts_val = seconds_to_timestamp(best_matched_sec)
-                current_secs = best_matched_sec
-            else:
+            if not matched_flag:
                 for stt_sec, stt_text in streamer_stt_list:
                     if abs(current_secs - stt_sec) <= 5:
                         best_matched_sec = max(0, stt_sec - 3)
-                        ts_val = seconds_to_timestamp(best_matched_sec)
-                        current_secs = best_matched_sec
                         break
+
+            if best_matched_sec != current_secs:
+                ts_val = seconds_to_timestamp(best_matched_sec)
+                current_secs = best_matched_sec
 
             if current_secs > 1800:
                 if gl_val in ["오프닝", "방송시작", "방송 시작"]: 
                     gl_val = "저스트 채팅"
-                if "시작" in topic_val or "오프닝" in topic_val or "인사" in topic_val:
+                if any(x in topic_val for x in ["시작", "오프닝", "인사"]):
                     topic_val = "방송 잡담 및 일상 공유"
             
             if any(x in topic_val for x in ["소통", "시청자 리액션", "리액션", "티키타카"]):
@@ -664,8 +642,7 @@ def generate_chzzk_timeline(input_script, actual_title="VOD제목", chzzk_url=""
             if not pure_text or re.match(r"^[><!?\s\"']+$", pure_text) or re.match(r"^ㅋ+$", pure_text):
                 continue
 
-            cleaned_content = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', cleaned_content)
-            cleaned_content = cleaned_content.replace("전개.", "").replace("수행.", "").strip()
+            cleaned_content = re.sub(r'ㅋ{4,}', 'ㅋㅋㅋ', cleaned_content).replace("전개.", "").replace("수행.", "").strip()
 
             raw_items.append({
                 "seconds": current_secs,
@@ -698,8 +675,7 @@ def merge_and_format_final_timeline(all_processed_items: list) -> str:
         assigned_header = f"[{gl}; {topic}]"
         
         for past_norm_key, past_header in reversed(historical_tags):
-            past_gl = past_norm_key.split(";")[0]
-            past_pure_topic = past_norm_key.split(";")[-1]
+            past_gl, past_pure_topic = past_norm_key.split(";", 1)
             
             if norm_gl == past_gl:
                 is_topic_similar = (pure_topic == past_pure_topic) or \
@@ -758,15 +734,13 @@ def correct_streamer_nicknames_with_gemini(timeline_text: str, api_key: str, db_
         if match_ts:
             current_hour = int(match_ts.group(1))
             if current_hour >= 1:
-                if "방송 시작" in line_strip or "방송시작" in line_strip or "오픈" in line_strip:
-                    line_strip = re.sub(r"방송\s*시작\s*(인사|멘트)?", "방송 잡담 및 소통", line_strip)
-                    line_strip = re.sub(r"라이브\s*방송\s*잡담", "방송 잡담", line_strip)
+                line_strip = re.sub(r"방송\s*시작\s*(인사|멘트)?", "방송 잡담 및 소통", line_strip)
+                line_strip = re.sub(r"라이브\s*방송\s*잡담", "방송 잡담", line_strip)
         
         if line_strip.startswith("[") and ";" in line_strip and line_strip.endswith("]"):
             line_strip = re.sub(r"\([^)]+\)(?=\s*\])", "", line_strip).strip()
-            if current_hour >= 1:
-                if any(x in line_strip for x in ["방송 시작", "오프닝", "방송시작"]):
-                    line_strip = "[저스트 채팅; 방송 잡담 및 일상 공유]"
+            if current_hour >= 1 and any(x in line_strip for x in ["방송 시작", "오프닝", "방송시작"]):
+                line_strip = "[저스트 채팅; 방송 잡담 및 일상 공유]"
                     
         processed_lines.append(line_strip)
         
@@ -776,7 +750,7 @@ def correct_streamer_nicknames_with_gemini(timeline_text: str, api_key: str, db_
         "당신은 인터넷 방송 다시보기 타임라인의 구조와 정합성을 검수하고 완성하는 최종 편집 총괄자입니다.\n\n"
         "🚨 [소주제 닉네임 박제 전면 차단 지침]\n"
         "1. 대괄호 내부의 소주제 영역(예: [대주제; 소주제])에 스트리머들의 닉네임이나 괄호 표현이 들어가 있다면 이를 완벽하게 제거하십시오.\n"
-        "2. 타임라인 본문 내용(content)에서 오타가 난 명칭은 참고 DB를 바탕으로 자연스럽게 교정할 수 있으나, 소주제 타이틀에는 어떠한 인물명도 명시되어서는 안 됩니다.\n\n"
+        "2. 타임라인 본문 내용(content)에서 오타가 난 명칭은 참고 DB를 바탕으로 자연스럽게 교정할 수 있으나, 소주제 타이틀에는 어떠 한 인물명도 명시되어서는 안 됩니다.\n\n"
         "🚨 [최종 타임라인 정제 제약 사항]\n"
         "1. 제공되는 타임라인의 포맷 구조(대괄호, 시간 스탬프, 세미콜론)는 단 한 글자도 함부로 왜곡하거나 유실시키지 마십시오.\n"
         "2. 방송이 시작된 지 1시간 이상 지난 파트([01:00:00] 이후) 지점 본문 영역에 '방송 시작', '오프닝 인사'와 같은 관성적인 표현이 유실되어 남아있다면, 문맥을 읽어 완전히 소거하거나 '방송 잡담 및 소통' 등으로 매끄럽게 어미를 정돈하십시오.\n"
