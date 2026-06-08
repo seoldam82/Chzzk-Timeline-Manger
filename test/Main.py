@@ -1,3 +1,4 @@
+import datetime
 import os
 import sys
 import math
@@ -14,6 +15,7 @@ from Chzzk_api import (
     select_chzzk_vod, 
     download_chzzk_vod_chats, 
     write_chzzk_comment, 
+    find_game_category,
     CONFIG
 )
 from Timeline import (
@@ -29,6 +31,11 @@ from clip import (
     fetch_vod_detailed_info,
     convert_seconds_to_hms
 )
+
+SHOW = True
+def log(message, level="INFO", show=True):
+    if show:
+        print(f"{message}")
 
 def parse_chat_timestamp_to_secs(chat_line):
     match = re.match(r"^\[(\d{2}):(\d{2}):(\d{2})\]", chat_line)
@@ -76,9 +83,9 @@ def find_nearest_stt_start_seconds(target_sec, script_lines):
     return nearest_sec
 
 def process_direct_comment_mode():
-    print("\n-------------------------------------------------------------------------")
+    print("\n---------------------------------------------------------------")
     print("📂 기존 타임라인 파일 불러오기 및 바로 댓글 등록 모드")
-    print("-------------------------------------------------------------------------")
+    print("---------------------------------------------------------------")
     
     search_pattern = os.path.join("TL_VOD", "*", "TL_VOD_*.txt")
     txt_files = glob.glob(search_pattern)
@@ -115,13 +122,13 @@ def process_direct_comment_mode():
         print(f"❌ 파일을 읽는 중 오류 발생: {e}")
         return
 
-    print("\n=========================================================================")
+    print("\n===============================================================")
     print(f"📖 선택한 파일 [{selected_file}] 내용 미리보기")
-    print("=========================================================================")
+    print("===============================================================")
     print(comment_content[:1000]) 
     if len(comment_content) > 1000:
         print("\n... (이하 생략) ...")
-    print("=========================================================================")
+    print("===============================================================")
     
     timeline_len = len(comment_content)
     print(f"📊 현재 로드된 타임라인 글자 수: {timeline_len}자 / 5000자")
@@ -139,9 +146,9 @@ def process_direct_comment_mode():
 
 
 def run_pure_test():
-    print("\n-------------------------------------------------------------------------")
+    print("\n---------------------------------------------------------------")
     print("🤖 새 VOD 타임라인 생성 및 추출 모드 시작")
-    print("-------------------------------------------------------------------------")
+    print("---------------------------------------------------------------")
     
     TARGET_CHANNEL_ID = CONFIG.get("TARGET_CHANNEL_ID")
     GEMINI_API_KEY = CONFIG.get("GEMINI_API_KEY")
@@ -329,13 +336,13 @@ def run_pure_test():
         denominator = valid_date_clips if valid_date_clips > 0 else len(all_clips)
         recent_ratio = recent_clip_count / denominator if denominator > 0 else 0
         
-        print("-------------------------------------------------------------------------")
+        print("---------------------------------------------------------------")
         print(f"📊 [클립 데이터 현황 통계]")
         print(f"   - 수집된 전체 클립 개수: {len(all_clips)}개")
         if vod_date:
             print(f"   - 식별된 VOD 등록 날짜: {vod_date.strftime('%Y-%m-%d')}")
             print(f"   - 일주일(7일) 이내 생성된 최신 클립: {recent_clip_count}개 / (분석 가능: {valid_date_clips}개)")
-        print("-------------------------------------------------------------------------")
+        print("---------------------------------------------------------------")
 
         if (recent_ratio >= 0.5) or (valid_date_clips > 0 and recent_clip_count == valid_date_clips):
             disable_low_view_filter = True
@@ -398,14 +405,17 @@ def run_pure_test():
 
         popular_clips = final_popular_clips
         
-        print("-------------------------------------------------------------------------")
+        print("---------------------------------------------------------------")
         print(f"✅ [클립 최종 스크리닝 완료]")
         print(f"   - 최종 채택 클립: {len(popular_clips)}개")
         print(f"   - 중복 제거 클립: {removed_clip_count}개")
         print(f"   - 순위 탈락 혹은 기준 미달 클립: {unpopular_clip_count}개")
-        print("=========================================================================")
+        print("===============================================================")
 
     clip_guide_text = "\n".join(clip_score_mod_guide) if clip_score_mod_guide else "없음 (기본 가중치 적용)"
+    
+    game_category = find_game_category(vod_id)
+    log(f"\n🎮 [게임 카테고리 탐지 결과] VOD의 게임 카테고리 후보: {game_category if game_category else '없음'}", show=SHOW)
 
     CHUNK_SIZE_SECS = 3600
     all_raw_items = []
@@ -461,7 +471,7 @@ def run_pure_test():
             actual_title=actual_title,
             chzzk_url=full_vod_url,
             api_key=GEMINI_API_KEY,
-            chunk_index=chunk_index
+            chunk_index=chunk_index,
         )
 
         if chunk_items:
@@ -472,14 +482,14 @@ def run_pure_test():
     if not all_raw_items:
         print("❌ Gemini AI가 정상적인 타임라인 항목 뼈대를 생성하지 못했습니다.")
         return
-
+    
     final_output_text = merge_and_format_final_timeline(all_raw_items)
 
     print("⚙️  [최종 후처리] Gemini 모델을 활용한 문맥/유사도 기반 닉네임 교정 작업 수행 중...")
     final_output_text = Final_Processing(
         timeline_text=final_output_text, 
         api_key=GEMINI_API_KEY, 
-        db_filename="chzzk_streamers.txt"
+        db_filename="chzzk_streamers.txt",
     )
 
     ai_notice = "🤖 이 댓글은 방송 하이라이트를 AI가 분석하여 생성한 타임라인으로 다소 부정확한 부분이 있을 수 있습니다."
@@ -546,7 +556,7 @@ def run_pure_test():
                     min_diff = diff
                     matched_header = item["header"]
                     closest_item_idx = idx
-
+                    
             category_type = clip.get("categoryType", "")
             clip_category_name = clip.get("clipCategory", "").strip()
             
@@ -671,11 +681,11 @@ def run_pure_test():
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(final_timeline_string)
 
-    print("\n=========================================================================")
+    print("\n===============================================================")
     print("🎯 [완성] 최종 통합본")
-    print("=========================================================================")
+    print("===============================================================")
     print(final_timeline_string)
-    print("=========================================================================")
+    print("===============================================================")
     print(f"💾 최종 타임라인 결과 파일이 '{output_path}'로 안전하게 출력되었습니다!")
 
     timeline_len = len(final_timeline_string)
@@ -695,12 +705,12 @@ def run_pure_test():
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, lambda sig, frame: sys.exit(0))
     
-    print("=========================================================================")
-    print("             치지직 VOD 타임라인 매니저              ")
-    print("=========================================================================")
+    print("===============================================================")
+    print("                 치지직 VOD 타임라인 매니저              ")
+    print("===============================================================")
     print(" [1] AI 연산 실행하여 새 타임라인 파일 생성하기")
     print(" [2] 이미 만들어진 로컬 타임라인 파일 불러와 즉시 댓글 등록하기")
-    print("-------------------------------------------------------------------------")
+    print("---------------------------------------------------------------")
     
     menu = input("👉 원하시는 모드 번호를 선택하세요 (1 또는 2): ").strip()
     

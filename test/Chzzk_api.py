@@ -1,3 +1,4 @@
+from datetime import datetime
 import sys
 import json
 import requests
@@ -5,15 +6,20 @@ import re
 import os
 from collections import defaultdict
 
+SHOW = True
+def log(message, level="INFO", show=True):
+    if show:
+        print(f"{message}")
+
 def load_config():
     try:
         with open("config.json", "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print("❌ 에러: config.json 파일을 찾을 수 없습니다.")
+        log("❌ 에러: config.json 파일을 찾을 수 없습니다.", level="ERROR", show=SHOW)
         sys.exit(1)
     except json.JSONDecodeError:
-        print("❌ 에러: config.json 파일의 형식이 올바르지 않습니다.")
+        log("❌ 에러: config.json 파일의 형식이 올바르지 않습니다.", level="ERROR", show=SHOW)
         sys.exit(1)
 
 CONFIG = load_config()
@@ -30,7 +36,7 @@ def get_auto_chzzk_cookies():
     if nid_aut and nid_ses:
         return nid_aut, nid_ses
         
-    print("🔍 브라우저 로그인 세션 우회 탐색을 시작합니다...")
+    log("🔍 브라우저 로그인 세션 우회 탐색을 시작합니다...", level="INFO", show=SHOW)
 
     try:
         import browser_cookie3
@@ -114,7 +120,7 @@ def find_my_existing_comment(video_no, user_no, headers):
                         if "🤖" in content_str or "[00:" in content_str or "타임라인" in content_str:
                             return comment.get("commentId")
     except Exception as e:
-        print(f"⚠️ 기존 댓글 목록 조회 중 오류: {e}")
+        log(f"⚠️ 기존 댓글 목록 조회 중 오류: {e}", level="WARNING", show=SHOW)
     return None
 
 def write_chzzk_comment(video_no, comment_text):
@@ -149,14 +155,14 @@ def write_chzzk_comment(video_no, comment_text):
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         
         if response.status_code == 200:
-            print("✅ [성공] VOD에 댓글이 성공적으로 등록되었습니다!")
+            log("✅ [성공] VOD에 댓글이 성공적으로 등록되었습니다!", show=SHOW)
             return True
         else:
-            print(f"❌ [에러] 상태 코드: {response.status_code}")
-            print(f"   서버 응답: {response.text}")
+            log(f"❌ [에러] 상태 코드: {response.status_code}", level="ERROR", show=SHOW)
+            log(f"   서버 응답: {response.text}", level="ERROR", show=SHOW)
             return False
     except Exception as e:
-        print(f"❌ 통신 오류: {e}")
+        log(f"❌ 통신 오류: {e}", level="ERROR", show=SHOW)
         return False
 
 def get_chzzk_vod_list(channel_id, limit=10):
@@ -174,25 +180,26 @@ def get_chzzk_vod_list(channel_id, limit=10):
             if data.get("code") == 200:
                 return data.get("content", {}).get("data", [])
         return []
-    except Exception:
+    except Exception as e:
+        log(f"❌ VOD 리스트 조회 중 오류: {e}", level="ERROR", show=SHOW)
         return []
 
 def select_chzzk_vod(channel_id, limit=10):
     vod_list = get_chzzk_vod_list(channel_id, limit=limit)
     if not vod_list:
-        print("❌ 유효한 VOD가 없거나 채널 ID가 잘못되었습니다.")
+        log("❌ 유효한 VOD가 없거나 채널 ID가 잘못되었습니다.", level="ERROR", show=SHOW)
         return None, None, 0
         
-    print("\n" + "="*75)
-    print(f"🎬 VOD 리스트 (총 {len(vod_list)}개 발견)")
-    print("="*75)
+    log("\n" + "="*75, level="INFO", show=SHOW)
+    log(f"🎬 VOD 리스트 (총 {len(vod_list)}개 발견)", level="INFO", show=SHOW)
+    log("="*75, level="INFO", show=SHOW)
     for idx, video in enumerate(vod_list):
         title = video.get("videoTitle", "제목 없음")
         duration = video.get("duration", 0)
         hours = duration // 3600
         minutes = (duration % 3600) // 60
-        print(f"[{idx + 1:2d}] {title} ({hours}시간 {minutes}분)")
-    print("="*75)
+        log(f"[{idx + 1:2d}] {title} ({hours}시간 {minutes}분)", level="INFO", show=SHOW)
+    log("="*75, level="INFO", show=SHOW)
     
     while True:
         try:
@@ -204,12 +211,12 @@ def select_chzzk_vod(channel_id, limit=10):
                 video_no = selected_video.get("videoNo")
                 video_title = selected_video.get("videoTitle", "방송다시보기")
                 video_duration = selected_video.get("duration", 0)
-                print(f"\n🎯 [선택 완료] '{video_title}' 분석을 진행합니다.")
+                log(f"\n🎯 [선택 완료] '{video_title}' 분석을 진행합니다.", level="INFO", show=SHOW)
                 return str(video_no), video_title, video_duration
-            
-            print(f"❌ 1에서 {len(vod_list)} 사이의 숫자를 입력해주세요.")
+
+            log(f"❌ 1에서 {len(vod_list)} 사이의 숫자를 입력해주세요.", level="ERROR", show=SHOW)
         except ValueError:
-            print("❌ 올바른 숫자를 입력해주세요.")
+            log("❌ 올바른 숫자를 입력해주세요.", level="ERROR", show=SHOW)
 
 def download_chzzk_vod_chats(video_no, start_sec, end_sec):
     cache_dir = os.path.join(os.getcwd(), "cache_chat", str(video_no))
@@ -219,7 +226,7 @@ def download_chzzk_vod_chats(video_no, start_sec, end_sec):
     full_cache_path = os.path.join(cache_dir, full_cache_filename)
     
     if not os.path.exists(full_cache_path):
-        print(f"💬 치지직 VOD [{video_no}] 전체 채팅 데이터 최초 다운로드 및 화력 압축 시작...")
+        log(f"💬 치지직 VOD [{video_no}] 전체 채팅 데이터 최초 다운로드 및 화력 압축 시작...", level="INFO", show=SHOW)
         url = f"https://api.chzzk.naver.com/service/v1/videos/{video_no}/chats"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
@@ -269,7 +276,8 @@ def download_chzzk_vod_chats(video_no, start_sec, end_sec):
                 else:
                     current_time_ms = last_chat_time + 1
                     
-            except Exception:
+            except Exception as e:
+                log(f"❌ VOD 채팅 다운로드 중 오류: {e}", level="ERROR", show=SHOW)
                 break
 
         if not time_blocks:
@@ -328,18 +336,18 @@ def download_chzzk_vod_chats(video_no, start_sec, end_sec):
         try:
             with open(full_cache_path, "w", encoding="utf-8") as f:
                 f.write(final_compressed_chat)
-            print(f"💾 [캐시 저장 완료] VOD 전체 통합 캐시 파일 생성이 완료되었습니다: {os.path.join('cache_chat', str(video_no), full_cache_filename)}")
+            log(f"💾 [캐시 저장 완료] VOD 전체 통합 캐시 파일 생성이 완료되었습니다: {os.path.join('cache_chat', str(video_no), full_cache_filename)}", level="INFO", show=SHOW)
         except Exception as save_err:
-            print(f"⚠️ [캐시 저장 오류] 통합 캐시 파일을 생성하지 못했습니다: {save_err}")
+            log(f"⚠️ [캐시 저장 오류] 통합 캐시 파일을 생성하지 못했습니다: {save_err}", level="WARNING", show=SHOW)
 
     try:
         with open(full_cache_path, "r", encoding="utf-8") as f:
             full_chat_text = f.read()
     except Exception as read_err:
-        print(f"⚠️ [Cache Read Error] 통합 캐시 파일을 읽을 수 없습니다: {read_err}")
+        log(f"⚠️ [Cache Read Error] 통합 캐시 파일을 읽을 수 없습니다: {read_err}", level="WARNING", show=SHOW)
         return "채팅 캐시 로드 실패"
 
-    print(f"📁 [채팅 캐시 슬라이싱] 통합 채팅 캐시에서 구간 슬라이싱 중... ({int(start_sec)}초 ~ {int(end_sec)}초)")
+    log(f"📁 [채팅 캐시 슬라이싱] 통합 채팅 캐시에서 구간 슬라이싱 중... ({int(start_sec)}초 ~ {int(end_sec)}초)", level="INFO", show=SHOW)
     
     sliced_lines = []
     for line in full_chat_text.splitlines():
@@ -354,3 +362,85 @@ def download_chzzk_vod_chats(video_no, start_sec, end_sec):
         return "이 구간에는 실시간 채팅 기록이 존재하지 않습니다."
         
     return "\n".join(sliced_lines)
+
+def find_category_value(target_id):
+    url = "https://api.chzzk.naver.com/service/v1/categories/live"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://chzzk.naver.com/category/ALL",
+        "Accept": "application/json",
+        "Cookie": "NNB=P3ELKLDIXWEWQ; ba.uuid=44029ab1-a205-41e3-b1f3-51d5fdd6d2fb; ASID=76d9c5020000019a3432b0d300000024; NID_SES=AAAB4WeURVmnu+9nzW8BbeIMlcFon0dLZHZHQ2pJb0XRWd3NY+x8YV0fIaS+/Sh8Be9+uQhqT0/Kb2HcKSXXShf+UAO4acWaXWpQxInBZBpyXRt0n2bohpdUx70UAByF3S6vPQ0CYnkNeq7U62DMTf/XsZzk1R1Tom1gB1HqTQ05GRoLqBVwTogm1HPCeJdUs226oy9kvePwQc+cJKa8U113tcLf0E7G1b1LVDsytwgrOOOb0laba866CPcMjM+ExBHkhH2+3faT7tgBNnqZqj7tP4fe2xPj/rD3Y7uWdM30P2lOEK7uHJPYp2YihRDmVUpFuho0bKreSQrk7QRG0riMj5O21iXgj4MwR6nJZ71cO1E+Irulw78ziJaropx23BdTLrvZQXeCJkn0EfuuU4V++b5KvD9FYGymzX4UKUofbBt6gaP7K3qirQ/pSN1JYlFpGq6+dn7mjleE1nrOkipKjntI8/Vb2Ulg22DpwJBxrTHoNJTuMh5Z3rozVFhcpH72/zZvu3OLnK/lf12gp342ZbYDYYbiij/QSnCmyaWrnEDmhsJf2U9gD3gwqnSFk26KzAR9DQoX237hGU+HCus66pnoZ/C0lg0ZNtYeCY/7Q7ZBNkFKHTZrySa4t6tavW0ECsCKs78HiDtMc68RgV05d/k="
+    }
+    
+    params = {"size": 10}
+    
+    while True:
+        res = requests.get(url, headers=headers, params=params, timeout=5)
+        if res.status_code != 200: 
+            break
+        
+        json_data = res.json()
+        content = json_data.get("content")
+        
+        if content is None:
+            break
+            
+        data_list = content.get("data", [])
+        for item in data_list:
+            if item.get("categoryId") == target_id:
+                return item.get("categoryValue")
+        
+        page = content.get("page")
+        if not page or not isinstance(page, dict):
+            break
+            
+        next_info = page.get("next")
+        if not next_info or not isinstance(next_info, dict):
+            break
+        
+        params = {
+            "categoryId": next_info.get("categoryId"),
+            "concurrentUserCount": next_info.get("concurrentUserCount"),
+            "openLiveCount": next_info.get("openLiveCount"),
+            "size": 10
+        }
+    return None
+
+def find_game_category(vod_id):
+    file_path = os.path.join('cache_clips', str(vod_id), 'clips_data.json')
+    
+    if not os.path.exists(file_path):
+        return []
+
+    with open(file_path, 'r', encoding='utf-8') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError:
+            return []
+
+    if isinstance(data, dict):
+        data = [data]
+    elif not isinstance(data, list):
+        return []
+
+    category_set = set()
+    
+    for item in data:
+        if not item.get("clipUID"):
+            continue
+            
+        category_type = item.get("categoryType")
+        clip_category = item.get("clipCategory")
+        
+        if category_type == "GAME" and clip_category:
+            category_value = find_category_value(clip_category)
+            
+            if category_value:
+                category_set.add(category_value)
+            else:
+                category_set.add(clip_category)
+        
+    return list(category_set)
+
+if __name__ == "__main__":
+    print(find_game_category('13591994'))
