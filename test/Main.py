@@ -414,7 +414,7 @@ def run_pure_test():
 
     clip_guide_text = "\n".join(clip_score_mod_guide) if clip_score_mod_guide else "없음 (기본 가중치 적용)"
     
-    game_category = find_game_category(vod_id)
+    game_category = find_game_category(vod_id, category_mapping_path='category.json')
     log(f"\n🎮 [게임 카테고리 탐지 결과] VOD의 게임 카테고리 후보: {game_category if game_category else '없음'}", show=SHOW)
 
     CHUNK_SIZE_SECS = 3600
@@ -490,6 +490,7 @@ def run_pure_test():
         timeline_text=final_output_text, 
         api_key=GEMINI_API_KEY, 
         db_filename="chzzk_streamers.txt",
+        game_category=game_category
     )
 
     ai_notice = "🤖 이 댓글은 방송 하이라이트를 AI가 분석하여 생성한 타임라인으로 다소 부정확한 부분이 있을 수 있습니다."
@@ -557,7 +558,7 @@ def run_pure_test():
                     matched_header = item["header"]
                     closest_item_idx = idx
                     
-            category_type = clip.get("categoryType", "")
+            """category_type = clip.get("categoryType", "")
             clip_category_name = clip.get("clipCategory", "").strip()
             
             if category_type == "GAME" and clip_category_name:
@@ -618,7 +619,7 @@ def run_pure_test():
                                 timeline_stream_items[right_idx]["header"] = new_game_header
                             right_idx += 1
                 else:
-                    matched_header = new_game_header
+                    matched_header = new_game_header"""
             
             timeline_stream_items.append({
                 "seconds": final_timestamp_sec,

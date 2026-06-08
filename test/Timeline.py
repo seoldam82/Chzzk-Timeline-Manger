@@ -960,7 +960,9 @@ def Final_Processing(timeline_text: str, api_key: str, db_filename="chzzk_stream
             clean_contents_list.append(f"{pure_content} [{marker_id}]")
         else:
             clean_contents_list.append(line_strip)
-        
+            
+    
+    log(f"게임 카테고리: {game_category}", level="INFO", show=False)
     intermediate_text = "\n".join(clean_contents_list)
     system_instruction = (
         "당신은 인터넷 방송 다시보기 타임라인 본문의 맞춤법과 어색한 문장 구조를 종합 검수하는 최상위 전문 편집자입니다.\n\n"
@@ -976,15 +978,22 @@ def Final_Processing(timeline_text: str, api_key: str, db_filename="chzzk_stream
         "2. 문장 내에 '자살', '자해'라는 단어는 단 한 번도 절대 사용하지 마십시오.\n"
         "3. 마크다운 코드 블록 마크(```)는 절대 포함하지 말고 순수 텍스트만 출력하십시오.\n\n"
         "🚨 [대주제 판별 및 게임 카테고리 매칭 규칙]\n"
-        "- 분석 중인 영상의 대주제가 '게임 방송'인 경우에만 아래의 게임 카테고리 매칭 및 검증 작업을 수행하십시오. 게임 방송이 아니라면 이 단계를 건너뜁니다.\n"
-        "- 게임 방송인 경우, 미리 주어진 게임 카테고리 리스트 {game_category}를 기반으로 해당 게임의 핵심 장르 후보 키워드를 유추하십시오.\n"
-        "- 유추한 장르 키워드를 타임라인의 소주제 문장과 비교하되, 만약 키워드가 서로 맞지 않고 어긋난다면 억지로 비교하거나 짜맞추려 하지 말고 소주제에 부합하는 다른 게임 이름으로 유추하여 사용하십시오.\n"
-        "- 만약 소주제 텍스트 내에 이미 명확한 게임 이름이 적혀 있는 경우에는 억지로 장르를 비교하지 말고 해당 게임 이름을 그대로 최종 결과로 채택하십시오.\n\n"
+        "- 분석 중인 영상의 대주제가 '게임 방송'인 경우에만 아래의 최종 헤더 매칭 작업을 수행하십시오.\n"
+        "- 입력 데이터로 주어지는 [소주제 텍스트]의 핵심 맥락(예: 잠입 액션)을 파악하십시오.\n\n"
         "🚨 [제공된 카테고리 참조 및 일관성 최우선 규칙]\n"
-        "- **[최우선 사항]** 대괄호 헤더인 `[게임 방송; 명칭]`을 작성할 때, 임의로 명칭을 지어내지 말고 **반드시 주어지는 게임 카테고리 리스트 {game_category} 안에 존재하는 값을 최우선으로 매칭하여 사용**하십시오.\n"
-        "- 소주제에 맥락상 같은 게임을 플레이하는 중이라면 임의로 헤더를 쪼개지 말고 반드시 제공된 카테고리명 하나로 통일하여 적용해야 합니다.\n"
-        "- 단, {game_category}의 값이 실제 게임명과 전혀 연관이 없거나 매칭이 완벽하게 실패한 경우에만 소주제 텍스트에서 명확하게 드러나는 실제 다른 게임 이름을 유추하여 사용하십시오."
-    )
+        f"- [제공된 후보 리스트]: {game_category}\n"
+        "- **[최우선 사항]** 최종 헤더를 결정할 때 임의로 게임 명칭을 지어내지 말고, **반드시 위에 제공된 후보 리스트 안에 존재하는 게임 명칭을 최우선적으로 매칭하여 사용**하십시오.\n\n"
+        "🚨 [예외 처리 및 예외적 채택 규칙]\n"
+        "- **[예외 1. 명확한 게임명 존재]** 만약 [소주제 텍스트] 내에 이미 명확한 게임 이름이 직접적으로 적혀 있는 경우에는, 후보 리스트와 무관하게 해당 게임 이름을 그대로 최종 헤더에 채택하십시오.\n"
+        "- **[예외 2. 키워드 완전 불일치]** 제공된 후보 리스트의 모든 값이 [소주제 텍스트]의 맥락과 전혀 연관이 없고 완전히 어긋나는 극단적인 경우에만, 억지로 짜맞추지 말고 소주제에 부합하는 실제 다른 게임 이름을 유추하여 최종 헤더에 채택하십시오.\n\n"
+        "🚨 [장르 비교 및 최종 헤더 구조 매칭 규칙]\n"
+        "- 위의 예외 사항에 해당하지 않는 일반적인 경우, 후보 리스트 내 게임들의 장르 키워드와 [소주제 텍스트]를 비교하여 가장 연관성이 높은 단 하나의 게임명을 선택하십시오.\n"
+        "- 최종 출력은 선택되거나 유추된 게임명을 사용하여 반드시 `[게임 방송; 선택된게임명]` 형태의 헤더 구조로 완성해야 합니다.\n\n"
+        "🚨 [출력 형식 및 제한 규칙]\n"
+        "- 인사말, 설명, 주석, 분석 과정 등 모든 부연 설명을 절대 출력하지 마십시오.\n"
+        "- 오직 매칭 결과가 반영된 최종 헤더 구조 단 한 줄만 문자열로 반환하십시오.\n"
+        "- 예시: [게임 방송; 디아블로4]\n\n"
+)
 
     user_prompt = (
         f"===[치지직 스트리머 마스터 DB (참고 사전)]===\n{streamers_db_content}\n\n"
@@ -994,7 +1003,7 @@ def Final_Processing(timeline_text: str, api_key: str, db_filename="chzzk_stream
 
     corrected_text = ""
     try:
-        model_name = globals().get("GEMINI_MODEL", "gemini-2.5-flash")
+        model_name = globals().get("GEMINI_MODEL", "gemini-3.5-flash")
         max_tokens = globals().get("MAX_OUTPUT_TOKENS", 8192)
 
         client = genai.Client(api_key=api_key)
@@ -1012,6 +1021,8 @@ def Final_Processing(timeline_text: str, api_key: str, db_filename="chzzk_stream
     except Exception as e:
         log(f"⚠️ [Gemini 검수 예외] 1차 전제본으로 대체합니다: {e}", level="WARNING", show=SHOW)
         corrected_text = intermediate_text
+
+    log(f"{corrected_text}", level="INFO", show=False)
 
     valid_items = []
     for m_id, meta in line_meta_table.items():

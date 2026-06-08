@@ -363,50 +363,31 @@ def download_chzzk_vod_chats(video_no, start_sec, end_sec):
         
     return "\n".join(sliced_lines)
 
-def find_category_value(target_id):
-    url = "https://api.chzzk.naver.com/service/v1/categories/live"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://chzzk.naver.com/category/ALL",
-        "Accept": "application/json",
-        "Cookie": "NNB=P3ELKLDIXWEWQ; ba.uuid=44029ab1-a205-41e3-b1f3-51d5fdd6d2fb; ASID=76d9c5020000019a3432b0d300000024; NID_SES=AAAB4WeURVmnu+9nzW8BbeIMlcFon0dLZHZHQ2pJb0XRWd3NY+x8YV0fIaS+/Sh8Be9+uQhqT0/Kb2HcKSXXShf+UAO4acWaXWpQxInBZBpyXRt0n2bohpdUx70UAByF3S6vPQ0CYnkNeq7U62DMTf/XsZzk1R1Tom1gB1HqTQ05GRoLqBVwTogm1HPCeJdUs226oy9kvePwQc+cJKa8U113tcLf0E7G1b1LVDsytwgrOOOb0laba866CPcMjM+ExBHkhH2+3faT7tgBNnqZqj7tP4fe2xPj/rD3Y7uWdM30P2lOEK7uHJPYp2YihRDmVUpFuho0bKreSQrk7QRG0riMj5O21iXgj4MwR6nJZ71cO1E+Irulw78ziJaropx23BdTLrvZQXeCJkn0EfuuU4V++b5KvD9FYGymzX4UKUofbBt6gaP7K3qirQ/pSN1JYlFpGq6+dn7mjleE1nrOkipKjntI8/Vb2Ulg22DpwJBxrTHoNJTuMh5Z3rozVFhcpH72/zZvu3OLnK/lf12gp342ZbYDYYbiij/QSnCmyaWrnEDmhsJf2U9gD3gwqnSFk26KzAR9DQoX237hGU+HCus66pnoZ/C0lg0ZNtYeCY/7Q7ZBNkFKHTZrySa4t6tavW0ECsCKs78HiDtMc68RgV05d/k="
-    }
+def load_category_mapping(mapping_file_path='category.json'):
+    if not os.path.exists(mapping_file_path):
+        return {}
     
-    params = {"size": 10}
+    try:
+        with open(mapping_file_path, 'r', encoding='utf-8-sig') as f:
+            category_data = json.load(f)
+            
+            if isinstance(category_data, dict):
+                category_data = [category_data]
+                
+            if isinstance(category_data, list):
+                mapping = {}
+                for item in category_data:
+                    c_id = item.get('categoryId')
+                    c_val = item.get('categoryValue')
+                    if c_id is not None and c_val is not None:
+                        mapping[str(c_id).strip()] = str(c_val).strip()
+                return mapping
+    except Exception:
+        return {}
     
-    while True:
-        res = requests.get(url, headers=headers, params=params, timeout=5)
-        if res.status_code != 200: 
-            break
-        
-        json_data = res.json()
-        content = json_data.get("content")
-        
-        if content is None:
-            break
-            
-        data_list = content.get("data", [])
-        for item in data_list:
-            if item.get("categoryId") == target_id:
-                return item.get("categoryValue")
-        
-        page = content.get("page")
-        if not page or not isinstance(page, dict):
-            break
-            
-        next_info = page.get("next")
-        if not next_info or not isinstance(next_info, dict):
-            break
-        
-        params = {
-            "categoryId": next_info.get("categoryId"),
-            "concurrentUserCount": next_info.get("concurrentUserCount"),
-            "openLiveCount": next_info.get("openLiveCount"),
-            "size": 10
-        }
-    return None
+    return {}
 
-def find_game_category(vod_id):
+def find_game_category(vod_id, category_mapping_path='category.json'):
     file_path = os.path.join('cache_clips', str(vod_id), 'clips_data.json')
     
     if not os.path.exists(file_path):
@@ -423,6 +404,7 @@ def find_game_category(vod_id):
     elif not isinstance(data, list):
         return []
 
+    category_mapping = load_category_mapping(category_mapping_path)
     category_set = set()
     
     for item in data:
@@ -430,17 +412,20 @@ def find_game_category(vod_id):
             continue
             
         category_type = item.get("categoryType")
-        clip_category = item.get("clipCategory")
         
-        if category_type == "GAME" and clip_category:
-            category_value = find_category_value(clip_category)
+        if category_type == "GAME":
+            clip_category = item.get("clipCategory")
             
-            if category_value:
-                category_set.add(category_value)
-            else:
-                category_set.add(clip_category)
+            if clip_category is not None and str(clip_category).strip() != "":
+                clip_category_str = str(clip_category).strip()
+            
+                final_category = category_mapping.get(clip_category_str, clip_category_str)
+                
+                if final_category:
+                    category_set.add(final_category)
         
     return list(category_set)
 
 if __name__ == "__main__":
-    print(find_game_category('13591994'))
+    result = find_game_category('13591994', category_mapping_path='category.json')
+    print(result)
