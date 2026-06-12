@@ -16,10 +16,10 @@ from Chzzk_api import (
     download_chzzk_vod_chats, 
     write_chzzk_comment, 
     find_game_category,
+    download_chzzk_vod_audio,
     CONFIG
 )
 from Timeline import (
-    download_chzzk_vod_audio,
     transcribe_chzzk_audio,
     generate_chzzk_timeline,
     merge_and_format_final_timeline,
@@ -384,8 +384,8 @@ def run_pure_test():
             top_cutoff_limit = 3
             print(f"⚠️   [소형 클립 세션] 최종 클립이 {total_unique_count}개이므로 3개를 추출합니다.")
         else:
-            top_cutoff_limit = max(1, math.ceil(total_unique_count * 0.3))
-            print(f"📊 [정상 세션] 최종 클립이 {total_unique_count}개이므로 상위 30%(반올림)인 {top_cutoff_limit}개를 추출합니다.")
+            top_cutoff_limit = max(1, math.ceil(total_unique_count * 0.4))
+            print(f"📊 [정상 세션] 최종 클립이 {total_unique_count}개이므로 상위 40%(반올림)인 {top_cutoff_limit}개를 추출합니다.")
         
         final_popular_clips = []
         
@@ -417,7 +417,7 @@ def run_pure_test():
     game_category = find_game_category(vod_id, category_mapping_path='category.json')
     log(f"\n🎮 [게임 카테고리 탐지 결과] VOD의 게임 카테고리 후보: {game_category if game_category else '없음'}", show=SHOW)
 
-    CHUNK_SIZE_SECS = 3600
+    CHUNK_SIZE_SECS = 1800
     all_raw_items = []
     
     current_chunk_start = global_start_sec

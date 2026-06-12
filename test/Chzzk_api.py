@@ -5,6 +5,18 @@ import requests
 import re
 import os
 from collections import defaultdict
+from yt_dlp import YoutubeDL
+import glob
+import subprocess
+import shutil
+
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(CURRENT_DIR, "..", ".."))
+FFMPEG_EXE = "ffmpeg.exe" if sys.platform == "win32" else "ffmpeg"
+FFMPEG_PATH = os.path.join(PROJECT_ROOT, "ffmpeg", "bin", FFMPEG_EXE)
+FFMPEG_BIN_DIR = os.path.dirname(FFMPEG_PATH)
+if os.path.exists(FFMPEG_BIN_DIR) and FFMPEG_BIN_DIR not in os.environ["PATH"]:
+    os.environ["PATH"] = FFMPEG_BIN_DIR + os.pathsep + os.environ["PATH"]
 
 SHOW = True
 def log(message, level="INFO", show=True):
@@ -217,6 +229,229 @@ def select_chzzk_vod(channel_id, limit=10):
             log(f"❌ 1에서 {len(vod_list)} 사이의 숫자를 입력해주세요.", level="ERROR", show=SHOW)
         except ValueError:
             log("❌ 올바른 숫자를 입력해주세요.", level="ERROR", show=SHOW)
+            
+def sanitize_chzzk_url(url: str) -> str:
+    if not url:
+        return ""
+    markdown_match = re.search(r'\[.*?\]\((.*?)\)', url)
+    if markdown_match:
+        actual_url = markdown_match.group(1)
+        remaining_str = re.sub(r'\[.*?\]\((.*?)\)', '', url).strip()
+        if remaining_str and remaining_str not in actual_url:
+            if not actual_url.endswith('/'):
+                url = actual_url + "/" + remaining_str
+            else:
+                url = actual_url + remaining_str
+        else:
+            url = actual_url
+    return url.strip().replace("'", "").replace('"', '')
+
+def get_video_duration(chzzk_url):
+    match = re.search(r'/video/(\d+)', chzzk_url)
+    if not match:
+        return 0
+
+    vod_id = match.group(1)
+
+    headers = {
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://chzzk.naver.com/",
+        "Origin": "https://chzzk.naver.com"
+    }
+
+    r = requests.get(
+        f"https://api.chzzk.naver.com/service/v2/videos/{vod_id}",
+        headers=headers,
+        timeout=30
+    )
+
+    r.raise_for_status()
+
+    return int(r.json()["content"]["duration"])
+
+def download_chzzk_vod_audio(chzzk_url, vod_id, output_filename="full_vod_audio"):
+    chzzk_url = sanitize_chzzk_url(chzzk_url)
+
+    specific_palette_dir = os.path.join(
+        os.getcwd(),
+        "voicepalette",
+        f"VOD_{vod_id}"
+    )
+
+    try:
+        os.makedirs(specific_palette_dir, exist_ok=True)
+    except PermissionError:
+        log(f"❌ [권한 오류] '{specific_palette_dir}' 폴더를 생성할 권한이 없습니다. 관리자 권한으로 실행하세요.")
+        return ""
+    except Exception as e:
+        log(f"❌ [폴더 생성 실패] {e}")
+        return ""
+
+    master_audio_mp4 = os.path.join(
+        specific_palette_dir,
+        f"{output_filename}.mp4"
+    )
+
+    if os.path.exists(master_audio_mp4) and os.path.getsize(master_audio_mp4) > 102400:
+        log(f"✨ [오디오 캐시 적중] 전체 원본 MP4 파일 로드 완료: {master_audio_mp4}")
+        return master_audio_mp4
+
+    ffmpeg_bin = (
+        FFMPEG_PATH
+        if os.path.exists(FFMPEG_PATH)
+        else "ffmpeg"
+    )
+
+    total_duration = get_video_duration(chzzk_url)
+
+    if total_duration == 0:
+        log("❌ VOD 메타데이터 파싱 실패.")
+        return ""
+
+    log(f"\n📡 [최초 1회 실행] 멀티스레드 오디오 수집 개시...")
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': master_audio_mp4,
+        'keepvideo': False,
+        'nocheckcertificate': True,
+        'noplaylist': True,
+        'concurrent_fragment_downloads': 16,
+        'socket_timeout': 60,
+        'retries': 20,
+        'fragment_retries': 30,
+        'skip_unavailable_fragments': True,
+        'http_chunk_size': 5242880,
+        'ffmpeg_location': ffmpeg_bin,
+        'fixup': 'never',
+        'postprocessors': [],
+    }
+
+    try:
+        with YoutubeDL(ydl_opts) as ydl:
+            ydl.extract_info(chzzk_url, download=True)
+
+    except Exception as e:
+        log(f"⚠️ yt-dlp 실패, Fallback 다운로드 시도: {e}", level="WARNING", show=SHOW)
+
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://chzzk.naver.com/",
+                "Origin": "https://chzzk.naver.com"
+            }
+
+            video_info = requests.get(
+                f"https://api.chzzk.naver.com/service/v2/videos/{vod_id}",
+                headers=headers,
+                timeout=30
+            ).json()["content"]
+
+            video_id = video_info["videoId"]
+            in_key = video_info["inKey"]
+
+            playback = requests.get(
+                f"https://apis.naver.com/neonplayer/vodplay/v1/playback/{video_id}?key={in_key}",
+                headers=headers,
+                timeout=30
+            ).json()
+
+            audio_reps = []
+
+            for adap in playback.get("period", [{}])[0].get("adaptationSet", []):
+                log(adap.get("mimeType"))
+                
+                if adap.get("mimeType") == "audio/mp4":
+                    audio_reps.extend(adap.get("representation", []))
+
+            if audio_reps:
+                best = max(audio_reps, key=lambda x: x.get("bandwidth", 0))
+            else:
+                video_reps = []
+
+                for adap in playback.get("period", [{}])[0].get("adaptationSet", []):
+                    video_reps.extend(adap.get("representation", []))
+
+                best = min(video_reps, key=lambda x: x.get("bandwidth", 0))
+
+            stream_url = best["baseURL"][0]["value"]
+
+            log(f"📡 Fallback 스트림 확보: {best.get('id', 'unknown')}", show=SHOW)
+
+            cmd = [
+                ffmpeg_bin,
+                "-y",
+                "-i", stream_url,
+                "-vn",
+                "-c:a", "copy",
+                master_audio_mp4
+            ]
+
+            proc = subprocess.Popen(
+                cmd,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+                encoding="utf-8",
+                errors="ignore"
+            )
+
+            last_percent = -1
+
+            for line in proc.stderr:
+                m = re.search(
+                    r'time=(\d+):(\d+):(\d+\.\d+)',
+                    line
+                )
+
+                if not m:
+                    continue
+
+                h = int(m.group(1))
+                mi = int(m.group(2))
+                s = float(m.group(3))
+
+                current = h * 3600 + mi * 60 + s
+
+                percent = min(
+                    100,
+                    int(current / total_duration * 100)
+                )
+
+                if percent != last_percent:
+                    last_percent = percent
+                    print(f"\r📥 Fallback 다운로드 {percent:3d}%", end="", flush=True)
+
+            proc.wait()
+            print()
+
+            if proc.returncode != 0:
+                raise RuntimeError("ffmpeg 다운로드 실패")
+
+            log("✅ Fallback MP4 생성 완료", show=SHOW)
+
+        except Exception as fallback_error:
+            log(f"❌ Fallback 다운로드 실패: {fallback_error}", level="ERROR", show=SHOW)
+
+    if not os.path.exists(master_audio_mp4):
+        extensions = ['*.m4a', '*.aac', '*.mp3', '*.mp4']
+        found_files = []
+
+        for ext in extensions:
+            found_files.extend(glob.glob(os.path.join(specific_palette_dir, f"{output_filename}{ext}")))
+
+        if found_files:
+            downloaded_file = found_files[0]
+
+            if downloaded_file != master_audio_mp4:
+                shutil.move(downloaded_file, master_audio_mp4)
+
+    if not os.path.exists(master_audio_mp4) or os.path.getsize(master_audio_mp4) < 1024:
+        log("❌ 원본 오디오 MP4 파일 생성 실패.", level="ERROR", show=SHOW)
+        return ""
+
+    log("✅ 원본 MP4 오디오 캐시 빌드가 영구 보관되었습니다.", show=SHOW)
+
+    return master_audio_mp4
 
 def download_chzzk_vod_chats(video_no, start_sec, end_sec):
     cache_dir = os.path.join(os.getcwd(), "cache_chat", str(video_no))

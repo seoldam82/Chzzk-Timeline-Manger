@@ -91,10 +91,7 @@ def fetch_live_categories():
                 
                 if not next_page_params:
                     break
-                    
-                if len(live_categories) > 500: 
-                    print("충분한 양의 실시간 카테고리가 수집되어 탐색을 종료합니다.")
-                    break
+
             else:
                 print(f"API 호출 실패: {res.status_code}")
                 break
